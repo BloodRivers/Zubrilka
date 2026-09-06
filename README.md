@@ -24,26 +24,19 @@ firestore.rules
 ```bash
 cd client
 npm install
-cp .env.example .env   # заполнить VITE_FIREBASE_* (остальное можно не трогать)
+cp .env.example .env   # заполнить VITE_FIREBASE_*
 npm run dev
 ```
 
-Сразу из коробки работает **локальный режим** (`VITE_USE_MOCK=1`):
-структура конспекта, тесты и оценка генерируются в браузере. Это
-фолбэк для разработки; в проде включаем настоящий LLM.
-
-### 3. Polza AI (Claude / OpenAI)
+### 3. Polza AI
 
 LLM вызывается из браузера через [Polza AI](https://polza.ai) (BYOK).
-Доступны только Claude и OpenAI — без Gemini/Google.
 
 1. Ключ: [polza.ai/dashboard](https://polza.ai/dashboard).
-2. В `client/.env`: `VITE_USE_MOCK=0`.
-3. В приложении: **Настройки → Модель ИИ** — вставить ключ.
-   По умолчанию Claude Sonnet 4.5 (нормальный OCR). Дешёвые mini — только если ок с потерями.
-4. Собрать и задеплоить статику: `npm run build`, затем загрузить `client/dist`.
+2. В приложении: **Настройки → Модель ИИ** — вставить ключ.
+3. Собрать и задеплоить: `npm run build`, затем Firebase Hosting (`client/dist`).
 
-Ключ хранится только на устройстве (localStorage), в бандл не попадает.
+Ключ хранится на устройстве и в профиле Firestore, в бандл не попадает.
 
 ### 4. Запуск
 

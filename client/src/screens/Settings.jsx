@@ -92,7 +92,6 @@ export default function Settings() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [updating, setUpdating] = useState(false);
 
-  const mock = import.meta.env.VITE_USE_MOCK !== "0";
   const model = getModel();
 
   // Локальный ключ + облако + события синка с других экранов
@@ -248,7 +247,6 @@ export default function Settings() {
       >
         <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>
           Polza AI · свой ключ (BYOK)
-          {mock && <span style={{ color: "#E5484D", fontSize: 13, fontWeight: 700, marginLeft: 8 }}>мок включён</span>}
         </div>
         <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45 }}>
           API Ключ синхронизируется между устройствами через аккаунт.

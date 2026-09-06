@@ -1,8 +1,5 @@
 import { getNote } from "./firestore";
 import { aiJSON, aiText, collapseRepeats, assertVisionWorks } from "./ai";
-import { mockAnalyzeNote, mockGenerateTest, mockGradeWritten } from "./mock";
-
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "0";
 
 const SYSTEM_OCR =
   "Ты OCR для рукописных/печатных конспектов. "
@@ -347,11 +344,9 @@ async function analyzeFromPhotos(imageDataUrl) {
   return structured;
 }
 
-export const analyzeNote = USE_MOCK
-  ? () => mockAnalyzeNote()
-  : analyzeFromPhotos;
+export const analyzeNote = analyzeFromPhotos;
 
-async function generateTestLive(noteIds, modesOrType) {
+export async function generateTest(noteIds, modesOrType) {
   const modes = Array.isArray(modesOrType)
     ? modesOrType
     : typeof modesOrType === "object" && modesOrType?.modes
@@ -396,16 +391,10 @@ async function generateTestLive(noteIds, modesOrType) {
   return normalized;
 }
 
-export const generateTest = USE_MOCK
-  ? (noteIds, modesOrType) => mockGenerateTest(noteIds, modesOrType)
-  : generateTestLive;
-
-export const gradeWritten = USE_MOCK
-  ? (noteText, answer) => mockGradeWritten(noteText, answer)
-  : (noteText, answer) =>
-      aiJSON({
-        name: "grade-written",
-        system: SYSTEM_GRADE,
-        prompt: `Конспект:\n${String(noteText).slice(0, 12000)}\n\nОтвет ученика:\n${answer}`,
-        maxTokens: 800,
-      });
+export const gradeWritten = (noteText, answer) =>
+  aiJSON({
+    name: "grade-written",
+    system: SYSTEM_GRADE,
+    prompt: `Конспект:\n${String(noteText).slice(0, 12000)}\n\nОтвет ученика:\n${answer}`,
+    maxTokens: 800,
+  });
