@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(data) {
+      return signedIn() && data.owner_id == request.auth.uid;
+    }
+    function isPublic(data) {
+      return data.public == true;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /subjects/{id} {
+      allow read: if signedIn() && resource.data.owner_id == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
+      allow update, delete: if isOwner(resource.data);
+    }
+
+    match /notes/{id} {
+      allow read: if signedIn() && (isOwner(resource.data) || isPublic(resource.data));
+      allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
+      allow update, delete: if isOwner(resource.data);
+    }
+
+    match /tests/{id} {
+      allow read: if signedIn() && (isOwner(resource.data) || isPublic(resource.data));
+      allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
+      allow update, delete: if isOwner(resource.data);
+    }
+
+    match /test_results/{id} {
+      allow read: if signedIn() && resource.data.user_id == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.user_id == request.auth.uid;
+    }
+  }
+}

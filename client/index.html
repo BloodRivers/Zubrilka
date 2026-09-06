@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Забубрилка" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Забубрилка</title>
+    <style>
+      html, body, #root {
+        height: 100%;
+        margin: 0;
+        background: #0A0A0A;
+      }
+      @media (prefers-color-scheme: light) {
+        html, body, #root { background: #FAFAFA; }
+      }
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 400;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 0 32px;
+        text-align: center;
+        background: #0A0A0A;
+        color: #FAFAFA;
+        font-family: "SF Pro", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      }
+      @media (prefers-color-scheme: light) {
+        #boot-splash { background: #FAFAFA; color: #0A0A0A; }
+      }
+      #boot-splash .mark {
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        object-fit: cover;
+        margin-bottom: 20px;
+        display: block;
+      }
+      #boot-splash .title {
+        font-size: 21px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      #boot-splash .sub {
+        margin-top: 8px;
+        font-size: 14px;
+        line-height: 1.5;
+        opacity: 0.55;
+      }
+      #boot-splash .spin {
+        width: 24px;
+        height: 24px;
+        margin-top: 24px;
+        border-radius: 999px;
+        border: 2.5px solid rgba(128,128,128,0.35);
+        border-top-color: currentColor;
+        animation: boot-spin 800ms linear infinite;
+      }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot-splash">
+        <img class="mark" src="/favicon.png" alt="Забубрилка" width="72" height="72" />
+        <div class="title">Забубрилка</div>
+        <div class="sub">Загружаем…</div>
+        <div class="spin" aria-hidden="true"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

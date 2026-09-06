@@ -1,0 +1,172 @@
+@font-face {
+  font-family: "SF Pro";
+  src: url("./assets/fonts/SF-Pro.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0A0A0A;
+  font-family: "SF Pro", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (prefers-color-scheme: light) {
+  html, body { background: #FAFAFA; }
+}
+
+#root {
+  height: 100%;
+  background: inherit;
+}
+
+input, textarea {
+  -webkit-user-select: auto;
+  user-select: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+.press { transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease; }
+.press:active { transform: scale(0.95); }
+
+.rowpress { transition: opacity 160ms ease; }
+.rowpress:active { opacity: 0.5; }
+
+.accordion {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.accordion.open { grid-template-rows: 1fr; }
+.accordion-inner { overflow: hidden; }
+
+.scrollarea::-webkit-scrollbar { width: 0; height: 0; }
+.wheel { -webkit-overflow-scrolling: touch; }
+.wheel::-webkit-scrollbar { display: none; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes backdropOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes modalOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.92); }
+}
+
+@keyframes shakeX {
+  15%, 85% { transform: translateX(-1px); }
+  30%, 70% { transform: translateX(2px); }
+  45%, 55% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeUpOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
+@keyframes ghostShimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+.quizlet-scene {
+  perspective: 1100px;
+  -webkit-perspective: 1100px;
+  margin-bottom: 18px;
+}
+
+.quizlet-card {
+  position: relative;
+  width: 100%;
+  min-height: 180px;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  transition: transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.quizlet-card.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.quizlet-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: 20px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-sizing: border-box;
+  text-align: center;
+  line-height: 1.4;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.quizlet-face.back {
+  transform: rotateY(180deg);
+}
+
+.ghost-bone {
+  position: relative;
+  overflow: hidden;
+}
+
+.ghost-bone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  animation: ghostShimmer 1.15s ease-in-out infinite;
+  pointer-events: none;
+}
