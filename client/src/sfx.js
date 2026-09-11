@@ -1,3 +1,32 @@
+const SFX_KEY = "zubrilka:sfx";
+let enabled = true;
+try {
+  enabled = localStorage.getItem(SFX_KEY) !== "0";
+} catch {
+  /* ignore */
+}
+const changeListeners = new Set();
+
+export function isSfxEnabled() {
+  return enabled;
+}
+
+export function setSfxEnabled(v) {
+  enabled = Boolean(v);
+  try {
+    localStorage.setItem(SFX_KEY, enabled ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  for (const fn of changeListeners) fn(enabled);
+}
+
+export function onSfxChange(fn) {
+  changeListeners.add(fn);
+  fn(enabled);
+  return () => changeListeners.delete(fn);
+}
+
 let ac = null;
 
 function ctx() {
@@ -11,6 +40,7 @@ function ctx() {
 }
 
 function pop({ from = 900, to = 300, dur = 0.09, gain = 0.1, type = "sine", when = 0, detune = 0 }) {
+  if (!enabled) return;
   const audio = ctx();
   if (!audio) return;
   const t0 = audio.currentTime + when;

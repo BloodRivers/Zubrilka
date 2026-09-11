@@ -7,6 +7,8 @@ import { auth } from "../firebase";
 import { MODEL_OPTIONS, getApiKey, setApiKey, getBalance, getModel, setModel, onApiKeyChange, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import { updateUserProfile, getUserProfile } from "../api/firestore";
 import { enablePushNotifications } from "../api/push";
+import { setSfxEnabled, isSfxEnabled, onSfxChange } from "../sfx";
+import Switch from "../components/Switch";
 import { GhostInline } from "../components/Ghost";
 import { checkForAppUpdate } from "../swUpdate";
 import { useAlert } from "../components/Alert";
@@ -98,6 +100,12 @@ export default function Settings({ isGuest }) {
   const [pushOk, setPushOk] = useState(
     typeof Notification !== "undefined" && Notification.permission === "granted"
   );
+  const [sfxOn, setSfxOn] = useState(isSfxEnabled());
+
+  useEffect(() => {
+    setSfxOn(isSfxEnabled());
+    return onSfxChange(setSfxOn);
+  }, []);
 
   const model = getModel();
 
@@ -240,6 +248,24 @@ export default function Settings({ isGuest }) {
           </>
         )}
       </div>
+
+      <button
+        type="button"
+        className="press"
+        onClick={() => setSfxEnabled(!sfxOn)}
+        style={{
+          width: "100%",
+          ...row(t),
+          justifyContent: "space-between",
+          gap: 12,
+          marginTop: 8,
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        <span style={{ color: t.text, fontSize: 15 }}>Звуки интерфейса</span>
+        <Switch on={sfxOn} />
+      </button>
 
       <div style={sectionTitle(t, { marginTop: 24 })}>Модель ИИ</div>
 
@@ -500,8 +526,15 @@ export default function Settings({ isGuest }) {
       <button
         className="rowpress"
         type="button"
-        disabled={pushBusy || pushOk}
+        disabled={pushBusy}
         onClick={async () => {
+          if (pushOk) {
+            alert(
+              "Уведомления включены. Отключить их можно в настройках браузера: иконка с замком у адреса сайта → «Уведомления», либо в системных настройках → «Уведомления» → этот сайт/приложение.",
+              { title: "Уведомления включены" }
+            );
+            return;
+          }
           setPushBusy(true);
           try {
             const token = await enablePushNotifications();
@@ -511,7 +544,7 @@ export default function Settings({ isGuest }) {
             } else {
               alert(
                 Notification?.permission === "denied"
-                  ? "Разрешение на уведомления запрещено в браузере."
+                  ? "Разрешение на уведомления запрещено в браузере. Открой настройки сайта (замок у адреса) и разреши уведомления."
                   : "Проверь VAPID-ключ или разрешение на уведомления.",
                 { title: "Не удалось" }
               );
