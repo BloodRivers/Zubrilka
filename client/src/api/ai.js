@@ -4,6 +4,7 @@ export const DEFAULT_MODEL = "google/gemini-3.5-flash-lite";
 
 export const MODEL_OPTIONS = [
   { v: "google/gemini-3.5-flash-lite", label: "Gemini 3.5 Flash Lite" },
+  { v: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash" },
 ];
 
 /** Максимум ИИ-запросов на человека в календарный день. */
@@ -469,16 +470,44 @@ export async function assertVisionWorks(imageDataUrl) {
 function parseJSON(raw) {
   const text = String(raw).trim();
   if (!text) throw new Error("AI вернул пустой ответ");
-  try {
-    return JSON.parse(text.replace(/^```(json)?\s*|\s*```$/g, "").trim());
-  } catch {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(text.slice(start, end + 1));
-      } catch {}
+  const clean = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const candidates = [clean];
+
+  // Gemini can wrap valid JSON in a short explanation or return more than one block.
+  // Find balanced JSON values without treating braces inside quoted strings as syntax.
+  for (let start = 0; start < clean.length; start++) {
+    if (clean[start] !== "{" && clean[start] !== "[") continue;
+    const stack = [];
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < clean.length; i++) {
+      const ch = clean[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === "{" || ch === "[") stack.push(ch);
+      else if (ch === "}" || ch === "]") {
+        const expected = ch === "}" ? "{" : "[";
+        if (stack.pop() !== expected) break;
+        if (!stack.length) {
+          candidates.push(clean.slice(start, i + 1));
+          break;
+        }
+      }
     }
-    throw new Error("Модель вернула невалидный JSON");
   }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {}
+  }
+  throw new Error("Модель вернула невалидный JSON");
 }

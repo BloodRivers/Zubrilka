@@ -1,11 +1,22 @@
-const CACHE = "zubrilka-v9";
+const CACHE = "zubrilka-v11";
+
+try {
+  importScripts("/firebase-sw-config.js");
+  importScripts("https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js");
+  importScripts("https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging-compat.js");
+  if (self.__FIREBASE_CONFIG__) {
+    firebase.initializeApp(self.__FIREBASE_CONFIG__);
+    firebase.messaging();
+  }
+} catch (e) {
+  console.warn("[sw] firebase messaging init:", e);
+}
 
 self.addEventListener("message", (e) => {
   if (e.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("install", (e) => {
-  self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/manifest.json"])));
 });
 
@@ -22,7 +33,6 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // HTML / JS / CSS — всегда сначала сеть, иначе залипает старый бандл
   const isAsset =
     url.pathname.startsWith("/assets/")
     || url.pathname.endsWith(".js")
@@ -58,6 +68,23 @@ self.addEventListener("fetch", (e) => {
         })
         .catch(() => cached);
       return cached || fetched;
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const target = e.notification?.data?.url || "/";
+  e.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ("focus" in client) {
+          client.focus();
+          if ("navigate" in client) client.navigate(target);
+          return;
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(target);
     })
   );
 });

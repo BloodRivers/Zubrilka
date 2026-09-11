@@ -1,11 +1,13 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { Check, X, BookmarkPlus } from "lucide-react";
+import { Check, X, Minus, BookmarkPlus } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import ProgressBar from "../components/ProgressBar";
+import AuthorBar from "../components/AuthorBar";
+import MathText from "../components/MathText";
 import { GhostQuiz, useGhostHold } from "../components/Ghost";
 import Button from "../components/Button";
 import SaveToSubjectModal from "../components/SaveToSubjectModal";
@@ -13,8 +15,9 @@ import {
   getNote, getTest, listNotes, getSubject, listResults, saveTest, saveTestResult, listTestsForNotes,
   listSubjects, copyTestToSubject,
 } from "../api/firestore";
-import { generateTest, normalizeTestPayload, gradeWritten } from "../api/backend";
+import { generateTest, normalizeTestPayload, gradeWritten, TEST_SIZES, writtenQuestionsOf } from "../api/backend";
 import { onAIStatus, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
+import { sfx } from "../sfx";
 import { setQuizActive } from "../nav";
 
 const GEN_PHRASES = ["Формулирую вопросы…", "Подбираю короткие варианты…", "Собираю квизлет…"];
@@ -27,6 +30,138 @@ const MODE_OPTS = [
 ];
 
 const MATCH_ROUND = 4;
+
+function SizeSlider({ options, value, onChange, t }) {
+  const trackRef = useRef(null);
+  const initIdx = Math.max(0, options.findIndex((o) => o.id === value));
+  const [live, setLive] = useState(false);
+  const [idx, setIdxState] = useState(initIdx);
+  const idxRef = useRef(initIdx);
+
+  const count = options.length;
+  const active = options[idx] || options[0];
+  const pct = (count > 1 ? idx / (count - 1) : 0) * 100;
+  const stream = idx === count - 1;
+
+  const setIdx = (v) => {
+    idxRef.current = v;
+    setIdxState(v);
+  };
+
+  const posFromEvent = (e) => {
+    const rect = trackRef.current.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    return Math.round(frac * (count - 1));
+  };
+
+  const down = (e) => {
+    e.preventDefault();
+    setLive(true);
+    trackRef.current.setPointerCapture(e.pointerId);
+    setIdx(posFromEvent(e));
+  };
+  const move = (e) => {
+    if (!live) return;
+    setIdx(posFromEvent(e));
+  };
+  const up = () => {
+    if (!live) return;
+    setLive(false);
+    onChange(options[idxRef.current].id);
+  };
+
+  const glide = live ? "none" : "left 220ms cubic-bezier(0.16,1,0.3,1), width 220ms cubic-bezier(0.16,1,0.3,1)";
+
+  return (
+    <div style={{ margin: "14px 0 22px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        <div
+          ref={trackRef}
+          onPointerDown={down}
+          onPointerMove={move}
+          onPointerUp={up}
+          onPointerCancel={up}
+          style={{ position: "relative", flex: 1, height: 40, cursor: "pointer", touchAction: "none" }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              right: 0,
+              height: 16,
+              transform: "translateY(-50%)",
+              borderRadius: 999,
+              background: t.raised,
+              border: `1px solid ${t.border}`,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              width: `${pct}%`,
+              height: 16,
+              transform: "translateY(-50%)",
+              borderRadius: 999,
+              background: t.invBg,
+              overflow: "hidden",
+              transition: live ? "none" : "width 220ms cubic-bezier(0.16,1,0.3,1)",
+            }}
+          >
+            {stream && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "linear-gradient(90deg, transparent, rgba(59,130,246,0.95), transparent)",
+                  animation: "stream 1.6s linear infinite",
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: `${pct}%`,
+              width: 28,
+              height: 28,
+              transform: "translate(-50%, -50%)",
+              borderRadius: 999,
+              background: "#fff",
+              boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
+              border: `1px solid ${t.border}`,
+              transition: live ? "none" : "left 220ms cubic-bezier(0.16,1,0.3,1)",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+        <div
+          key={active.id}
+          className="swap"
+          style={{
+            width: 118,
+            flexShrink: 0,
+            fontSize: 14,
+            fontWeight: 700,
+            textAlign: "center",
+            color: stream ? "#3B82F6" : t.text,
+            whiteSpace: "nowrap",
+            transition: "color 200ms ease",
+          }}
+        >
+          {active.label}
+        </div>
+      </div>
+      <div key={`hint-${active.id}`} className="swap" style={{ color: t.sub, fontSize: 12.5, marginTop: 10 }}>
+        {active.hint}
+      </div>
+    </div>
+  );
+}
 
 function shuffleList(arr) {
   const a = [...arr];
@@ -62,7 +197,7 @@ function testHasContent(bundle) {
   return (bundle.questions?.length || 0) > 0
     || (bundle.quizlet?.length || 0) > 0
     || (bundle.match?.length || 0) > 0
-    || Boolean(bundle.written?.prompt);
+    || writtenQuestionsOf(bundle.written).length > 0;
 }
 
 export default function Quiz() {
@@ -81,13 +216,14 @@ export default function Quiz() {
   const [quizIdx, setQuizIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [quizKnown, setQuizKnown] = useState([]);
-  const [writtenText, setWrittenText] = useState("");
+  const [writtenAnswers, setWrittenAnswers] = useState([]);
   const [writtenResult, setWrittenResult] = useState(null);
   const [grading, setGrading] = useState(false);
   const [loading, setLoading] = useState(true);
   const showGhost = useGhostHold(loading);
   const [phase, setPhase] = useState("ready");
   const [modes, setModes] = useState(["single"]);
+  const [size, setSize] = useState("standard");
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState(null);
   const [phraseIdx, setPhraseIdx] = useState(0);
@@ -103,6 +239,7 @@ export default function Quiz() {
   const [matchTainted, setMatchTainted] = useState([]);
   const [matchWrong, setMatchWrong] = useState(null);
   const [matchRightOrder, setMatchRightOrder] = useState([]);
+  const [flash, setFlash] = useState([]);
   const forceCreate = Boolean(location.state?.create);
 
   const testIdRef = useRef(null);
@@ -147,7 +284,7 @@ export default function Quiz() {
     if (qs.length) setSection("choice");
     else if (next.quizlet?.length) setSection("quizlet");
     else if (next.match?.length) setSection("match");
-    else if (next.written) setSection("written");
+    else if (next.written) enterWritten();
     else {
       setPhase("new-test");
       return;
@@ -156,12 +293,13 @@ export default function Quiz() {
     setQuizIdx(0);
     setPicked(null);
     setMultiPick([]);
+    setFlash([]);
     setAnswers([]);
     answersRef.current = [];
     setFlipped(false);
     setQuizKnown([]);
     quizKnownRef.current = [];
-    setWrittenText("");
+    setWrittenAnswers([]);
     setWrittenResult(null);
     setMatchRound(0);
     setMatchLeftSel(null);
@@ -208,8 +346,13 @@ export default function Quiz() {
             noteIds: test?.note_ids || [],
             title: test?.title || "",
             subjectId: test?.subject_id || null,
-            weakTopics: mode === "weak" ? latest?.weak_topics || [] : null,
+            weakTopics: mode === "weak" ? latest?.weak_topics || null : null,
           });
+          if (writtenQuestionsOf(b.written).length) {
+            const noteIds = test?.note_ids || [];
+            const notes = (await Promise.all(noteIds.map((id) => getNote(id).catch(() => null)))).filter(Boolean);
+            noteTextRef.current = notes.map((n) => n.text || n.retelling || "").join("\n\n");
+          }
         } else if (subjectId) {
           const [subject, subjNotes] = await Promise.all([getSubject(subjectId), listNotes(subjectId)]);
           const ids = subjNotes.map((n) => n.id);
@@ -264,13 +407,15 @@ export default function Quiz() {
     if (!pending?.ids?.length) { navigate("/"); return; }
     if (!modes.length) { alert("Выбери хотя бы один тип заданий"); return; }
     setGenerating(true);
+    noteTextRef.current = (pending.notes || []).map((n) => n.text || n.retelling || "").join("\n\n");
     try {
-      const gen = await generateTest(pending.ids, { modes });
+      const gen = await generateTest(pending.ids, { modes, size });
       const b = normalizeTestPayload(gen, modes);
       if (!testHasContent(b)) throw new Error("Пустой тест");
       const saved = await saveTest({
         note_ids: pending.ids,
         type: "mixed",
+        size,
         modes: b.modes,
         questions: b.questions,
         quizlet: b.quizlet,
@@ -395,6 +540,10 @@ export default function Quiz() {
     setMatchRightOrder(shuffleList(slice.map((_, i) => i)));
   };
 
+  function enterWritten() {
+    setSection("written");
+  }
+
   const goAfterQuizlet = (quizKnownSnapshot) => {
     if (bundle?.match?.length) {
       matchOkRef.current = [];
@@ -404,7 +553,7 @@ export default function Quiz() {
       return;
     }
     if (bundle?.written) {
-      setSection("written");
+      enterWritten();
       return;
     }
     finish(answersRef.current, quizKnownSnapshot, writtenResult);
@@ -412,7 +561,7 @@ export default function Quiz() {
 
   const goAfterMatch = () => {
     if (bundle?.written) {
-      setSection("written");
+      enterWritten();
       return;
     }
     finish(answersRef.current, quizKnownRef.current, writtenResult, matchOkRef.current);
@@ -433,7 +582,7 @@ export default function Quiz() {
       setSection("match");
       return;
     }
-    if (bundle?.written) { setSection("written"); return; }
+    if (bundle?.written) { enterWritten(); return; }
     finish(nextAnswers, quizKnownRef.current, writtenResult);
   };
 
@@ -442,12 +591,15 @@ export default function Quiz() {
     const q = bundle.questions[qIndex];
     setPicked(i);
     const correct = Number(q.correct) === i;
+    if (correct) { setFlash([i]); sfx.correct(); } else sfx.wrong();
     const next = [...answersRef.current, {
       kind: "single", picked: [i], topic: q.topic, correct,
       explain: q.explain || "", q: q.q, options: q.options, correctIdx: q.correct,
     }];
     answersRef.current = next;
     setAnswers(next);
+    if (!correct) return;
+    setTimeout(() => setFlash([]), 420);
     setTimeout(() => advanceAfterChoice(next), q.explain?.trim() ? 1400 : 900);
   };
 
@@ -456,12 +608,16 @@ export default function Quiz() {
     const q = bundle.questions[qIndex];
     const correct = sameSet(multiPick, q.correct);
     setPicked(multiPick[0]);
+    const correctSet = Array.isArray(q.correct) ? q.correct.map(Number) : [Number(q.correct)];
+    if (correct) { setFlash(correctSet); sfx.correct(); } else sfx.wrong();
     const next = [...answersRef.current, {
       kind: "multi", picked: [...multiPick].sort((a, b) => a - b), topic: q.topic, correct,
       explain: q.explain || "", q: q.q, options: q.options, correctIdx: q.correct,
     }];
     answersRef.current = next;
     setAnswers(next);
+    if (!correct) return;
+    setTimeout(() => setFlash([]), 420);
     setTimeout(() => advanceAfterChoice(next), q.explain?.trim() ? 1400 : 900);
   };
 
@@ -506,6 +662,7 @@ export default function Quiz() {
 
   const resolveMatch = (leftId, rightId, slice) => {
     if (leftId === rightId) {
+      sfx.match();
       const globalId = matchRound * MATCH_ROUND + leftId;
       const clean = !matchTainted.includes(globalId);
       if (clean) matchOkRef.current = [...matchOkRef.current, globalId];
@@ -527,6 +684,7 @@ export default function Quiz() {
 
     const globalLeft = matchRound * MATCH_ROUND + leftId;
     const globalRight = matchRound * MATCH_ROUND + rightId;
+    sfx.wrong();
     setMatchTainted((prev) => [...new Set([...prev, globalLeft, globalRight])]);
     setMatchWrong({ left: leftId, right: rightId });
     setTimeout(() => {
@@ -537,11 +695,33 @@ export default function Quiz() {
   };
 
   const submitWritten = async () => {
-    if (grading || !writtenText.trim()) return;
+    if (grading) return;
+    const questions = writtenQuestionsOf(bundle.written);
+    if (!questions.length) { finish(answersRef.current, quizKnownRef.current, null, matchOkRef.current); return; }
+    if (questions.some((_, i) => !(writtenAnswers[i] || "").trim())) {
+      alert("Заполни все письменные ответы или пропусти задание");
+      return;
+    }
     setGrading(true);
     try {
-      const res = await gradeWritten(noteTextRef.current || titleRef.current, writtenText.trim());
-      const wr = { grade: Number(res?.grade) || 2, comment: String(res?.comment || "").trim(), answer: writtenText.trim() };
+      const answers = questions.map((_, i) => (writtenAnswers[i] || "").trim());
+      const results = await Promise.all(
+        questions.map((q, i) =>
+          gradeWritten(noteTextRef.current || titleRef.current, q.prompt, answers[i])
+            .then((res) => ({
+              prompt: q.prompt,
+              answer: answers[i],
+              grade: Number(res?.grade) || 2,
+              comment: String(res?.comment || "").trim(),
+            }))
+        )
+      );
+      const grade = Math.round((results.reduce((a, r) => a + r.grade, 0) / results.length) * 10) / 10;
+      const wr = {
+        questions: results,
+        grade,
+        comment: results.map((r, i) => `${i + 1}. ${r.comment || "—"}`).join(" "),
+      };
       setWrittenResult(wr);
       setTimeout(() => finish(answersRef.current, quizKnownRef.current, wr, matchOkRef.current), 1200);
     } catch (err) {
@@ -612,7 +792,7 @@ export default function Quiz() {
             const nQ = b.questions?.length || 0;
             const nQuiz = b.quizlet?.length || 0;
             const nMatch = b.match?.length || 0;
-            const hasW = Boolean(b.written?.prompt);
+            const hasW = writtenQuestionsOf(b.written).length > 0;
             const bits = [];
             if (nQ) bits.push(`${nQ} вопр.`);
             if (nQuiz) bits.push(`${nQuiz} карт.`);
@@ -704,6 +884,13 @@ export default function Quiz() {
             );
           })}
         </div>
+        <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Сколько вопросов</div>
+        <SizeSlider
+          options={Object.entries(TEST_SIZES).map(([id, s]) => ({ id, label: s.label, hint: s.hint }))}
+          value={size}
+          onChange={setSize}
+          t={t}
+        />
         <Button variant="primary" onClick={generate} disabled={generating || !modes.length} style={{ width: "100%" }}>
           {generating ? "Генерирую…" : "Сгенерировать тест"}
         </Button>
@@ -780,6 +967,18 @@ export default function Quiz() {
     </Button>
   ) : null;
 
+  const authorBar = isForeign && sourceTest?.author_name ? (
+    <AuthorBar
+      name={sourceTest.author_name}
+      photoUrl={sourceTest.author_photo_url}
+      uid={sourceTest.author_uid}
+      label="автор теста"
+      from={testId ? `/test/${testId}/quiz/full` : undefined}
+      t={t}
+      navigate={navigate}
+    />
+  ) : null;
+
   const saveModal = (
     <SaveToSubjectModal
       open={saveOpen}
@@ -796,7 +995,7 @@ export default function Quiz() {
     const nQ = bundle.questions?.length || 0;
     const nQuiz = bundle.quizlet?.length || 0;
     const nMatch = bundle.match?.length || 0;
-    const hasW = Boolean(bundle.written?.prompt);
+    const hasW = writtenQuestionsOf(bundle.written).length > 0;
 
     if (nQ) {
       if (section === "choice") segs.push((qIndex + (picked !== null ? 1 : 0)) / nQ);
@@ -815,7 +1014,7 @@ export default function Quiz() {
       } else segs.push(1);
     }
     if (hasW) {
-      if (section === "written") segs.push(writtenResult ? 1 : writtenText.trim() ? 0.55 : 0.15);
+      if (section === "written") segs.push(writtenResult ? 1 : 0.15);
       else segs.push(0);
     }
     return segs;
@@ -826,8 +1025,10 @@ export default function Quiz() {
     if (!q) { navigate("/"); return null; }
     const isMulti = q.kind === "multi";
     const showState = picked !== null;
+    const lastCorrect = answers[answers.length - 1]?.correct;
     return (
       <div>
+        {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
@@ -849,17 +1050,23 @@ export default function Quiz() {
             {isMulti ? "Несколько верных" : "Один ответ"}
           </div>
         </div>
-        <div style={{ color: t.text, fontSize: 20, fontWeight: 600, lineHeight: 1.35, marginBottom: 8 }}>{q.q}</div>
+        <div style={{ color: t.text, fontSize: 20, fontWeight: 600, lineHeight: 1.5, marginBottom: 8 }}>
+          <MathText text={q.q} />
+        </div>
         <div style={{ color: t.sub, fontSize: 13, marginBottom: 18 }}>
-          {isMulti ? "Отметь все подходящие варианты, затем нажми «Ответить»." : "Нажми на один вариант — сразу перейдёшь дальше."}
+          {isMulti ? "Отметь все подходящие варианты, затем нажми «Ответить»." : "Выбери ответ — при верном сразу перейдёшь дальше."}
         </div>
         {q.options.map((opt, i) => {
           const selected = isMulti ? multiPick.includes(i) : picked === i;
           const correctSet = Array.isArray(q.correct) ? q.correct.map(Number) : [Number(q.correct)];
           const isCorrect = correctSet.includes(i);
-          let bg = t.surface, border = t.border, color = t.text;
-          if (showState && isCorrect) { bg = t.invBg; color = t.inv; border = t.invBg; }
-          else if (showState && selected && !isCorrect) { bg = "transparent"; border = t.sub; color = t.sub; }
+          const flashing = flash.includes(i);
+          const missed = isMulti && showState && isCorrect && !selected;
+          let bg = t.surface, border = t.border, color = t.text, checkC = t.text, xC = t.text;
+          if (flashing) { bg = "#46A758"; border = "#46A758"; color = "#fff"; checkC = "#fff"; }
+          else if (missed) { bg = "rgba(245,166,35,0.12)"; border = "#F5A623"; checkC = "#F5A623"; }
+          else if (showState && isCorrect) { bg = "rgba(70,167,88,0.12)"; border = "#46A758"; checkC = "#46A758"; }
+          else if (showState && selected && !isCorrect) { border = "#E5484D"; xC = "#E5484D"; }
           else if (!showState && selected) { border = t.invBg; }
           return (
             <button key={i} type="button" className="press"
@@ -868,37 +1075,55 @@ export default function Quiz() {
                 if (isMulti) setMultiPick((prev) => prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]);
                 else pickSingle(i);
               }}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", marginBottom: 10, borderRadius: 14, border: `1px solid ${border}`, background: bg, color, fontSize: 14, fontFamily: "inherit", cursor: showState ? "default" : "pointer", textAlign: "left" }}>
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", marginBottom: 10, borderRadius: 14, border: `1px solid ${border}`, background: bg, color, fontSize: 14, fontFamily: "inherit", cursor: showState ? "default" : "pointer", textAlign: "left", transition: "transform 180ms cubic-bezier(0.16,1,0.3,1), opacity 180ms ease, background 200ms ease, border-color 200ms ease, color 200ms ease" }}>
               {isMulti && (
                 <span
                   style={{
                     width: 20,
                     height: 20,
                     borderRadius: 6,
-                    border: selected || (showState && isCorrect) ? "none" : `1.5px solid ${showState ? t.sub : t.border}`,
-                    background: selected || (showState && isCorrect) ? (showState && isCorrect ? t.inv : t.invBg) : "transparent",
-                    color: showState && isCorrect ? t.invBg : t.inv,
+                    border: flashing || (showState && isCorrect && selected) || (!showState && selected)
+                      ? "none"
+                      : showState && isCorrect
+                        ? `1.5px solid #F5A623`
+                        : `1.5px solid ${showState ? t.sub : t.border}`,
+                    background: flashing ? "#fff" : missed ? "transparent" : showState && isCorrect ? "#46A758" : !showState && selected ? t.invBg : "transparent",
+                    color: flashing ? "#46A758" : showState && isCorrect && !selected ? "#F5A623" : showState && isCorrect ? "#fff" : t.inv,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
-                  {(selected || (showState && isCorrect)) && <Check size={13} strokeWidth={3} />}
+                  {flashing || (!showState && selected) ? (
+                    <Check size={13} strokeWidth={3} />
+                  ) : showState && isCorrect ? (
+                    selected ? <Check size={13} strokeWidth={3} /> : <Minus size={13} strokeWidth={3} />
+                  ) : null}
                 </span>
               )}
-              <span style={{ flex: 1 }}>{opt}</span>
-              {!isMulti && showState && isCorrect && <Check size={16} />}
-              {!isMulti && showState && selected && !isCorrect && <X size={16} />}
-              {isMulti && showState && selected && !isCorrect && <X size={16} />}
+              <span style={{ flex: 1, lineHeight: 1.45 }}>
+                <MathText as="span" text={opt} style={{ fontSize: 14 }} />
+              </span>
+              {!isMulti && showState && isCorrect && <Check size={16} color={checkC} />}
+              {!isMulti && showState && selected && !isCorrect && <X size={16} color={xC} />}
+              {isMulti && showState && selected && !isCorrect && <X size={16} color={xC} />}
+              {isMulti && missed && <Minus size={16} color="#F5A623" />}
             </button>
           );
         })}
         {isMulti && !showState && (
           <Button onClick={submitMulti} disabled={multiPick.length === 0} style={{ marginTop: 8 }}>Ответить</Button>
         )}
+        {showState && !lastCorrect && (
+          <Button onClick={() => advanceAfterChoice(answersRef.current)} style={{ marginTop: 8, width: "100%" }}>
+            Дальше
+          </Button>
+        )}
         {showState && q.explain?.trim() && (
-          <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{q.explain.trim()}</div>
+          <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>
+            <MathText as="span" text={q.explain.trim()} style={{ fontSize: 13 }} />
+          </div>
         )}
         {saveModal}
       </div>
@@ -910,6 +1135,7 @@ export default function Quiz() {
     if (!card) return <GhostQuiz />;
     return (
       <div>
+        {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
         <div style={{ color: t.sub, fontSize: 13, marginBottom: 12 }}>Квизлет {quizIdx + 1} из {bundle.quizlet.length}</div>
@@ -918,11 +1144,12 @@ export default function Quiz() {
             role="button"
             tabIndex={0}
             className={`quizlet-card${flipped ? " is-flipped" : ""}`}
-            onClick={() => setFlipped((f) => !f)}
+            onClick={() => { setFlipped((f) => !f); sfx.flip(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 setFlipped((f) => !f);
+                sfx.flip();
               }
             }}
           >
@@ -930,7 +1157,7 @@ export default function Quiz() {
               className="quizlet-face front"
               style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.text }}
             >
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{card.term}</div>
+              <div style={{ fontSize: 22, fontWeight: 700 }}><MathText text={card.term} /></div>
               <div style={{ color: t.sub, fontSize: 12, fontWeight: 500, marginTop: 14 }}>
                 Термин · нажми, чтобы перевернуть
               </div>
@@ -939,7 +1166,7 @@ export default function Quiz() {
               className="quizlet-face back"
               style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.text }}
             >
-              <div style={{ fontSize: 16, fontWeight: 500 }}>{card.definition}</div>
+              <div style={{ fontSize: 16, fontWeight: 500 }}><MathText text={card.definition} /></div>
               <div style={{ color: t.sub, fontSize: 12, fontWeight: 500, marginTop: 14 }}>
                 Определение
               </div>
@@ -967,10 +1194,10 @@ export default function Quiz() {
       let opacity = 1;
       if (state === "selected") border = t.invBg;
       if (state === "done") {
-        bg = t.invBg;
-        color = t.inv;
-        border = t.invBg;
-        opacity = 0.55;
+        bg = "rgba(70,167,88,0.14)";
+        color = t.text;
+        border = "#46A758";
+        opacity = 0.62;
       }
       if (state === "wrong") {
         border = "#E5484D";
@@ -992,12 +1219,13 @@ export default function Quiz() {
         lineHeight: 1.35,
         textAlign: "center",
         cursor: state === "done" ? "default" : "pointer",
-        transition: "border-color 160ms ease, background 160ms ease, opacity 280ms ease",
+        transition: "transform 180ms cubic-bezier(0.16,1,0.3,1), border-color 160ms ease, background 160ms ease, opacity 280ms ease",
       };
     };
 
     return (
       <div>
+        {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
         <div style={{ color: t.sub, fontSize: 13, marginBottom: 8 }}>
@@ -1022,7 +1250,7 @@ export default function Quiz() {
                   onClick={() => tryMatch("left", i)}
                   style={cellStyle(state)}
                 >
-                  {p.left}
+                  <MathText text={p.left} style={{ fontSize: 13 }} />
                 </button>
               );
             })}
@@ -1044,7 +1272,7 @@ export default function Quiz() {
                   onClick={() => tryMatch("right", row)}
                   style={cellStyle(state)}
                 >
-                  {p.right}
+                  <MathText text={p.right} style={{ fontSize: 13 }} />
                 </button>
               );
             })}
@@ -1056,17 +1284,33 @@ export default function Quiz() {
   }
 
   if (section === "written") {
+    const questions = writtenQuestionsOf(bundle.written);
     return (
       <div>
+        {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
-        <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Письменный ответ</div>
-        <div style={{ color: t.text, fontSize: 18, fontWeight: 600, lineHeight: 1.4, marginBottom: 16 }}>{bundle.written?.prompt}</div>
+        <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+          Письменный ответ{questions.length > 1 ? ` · ${questions.length}` : ""}
+        </div>
         {!writtenResult ? (
           <>
-            <textarea value={writtenText} onChange={(e) => setWrittenText(e.target.value)} placeholder="Напиши своими словами…" rows={7}
-              style={{ width: "100%", boxSizing: "border-box", padding: 14, borderRadius: 16, border: `1px solid ${t.border}`, background: t.surface, color: t.text, fontSize: 15, fontFamily: "inherit", lineHeight: 1.45, resize: "vertical", marginBottom: 12 }} />
-            <Button onClick={submitWritten} disabled={grading || !writtenText.trim()}>{grading ? "Проверяю…" : "Проверить"}</Button>
+            {questions.map((q, i) => (
+              <div key={i} style={{ padding: 14, borderRadius: 16, border: `1px solid ${t.border}`, background: t.surface, marginBottom: 12 }}>
+                <div style={{ color: t.text, fontSize: 16, fontWeight: 600, lineHeight: 1.5, marginBottom: 10 }}>
+                  <MathText text={q.prompt} />
+                </div>
+                <textarea value={writtenAnswers[i] || ""} onChange={(e) => {
+                  const next = [...writtenAnswers];
+                  next[i] = e.target.value;
+                  setWrittenAnswers(next);
+                }} placeholder="Напиши своими словами…" rows={5}
+                  style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 14, border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontSize: 14.5, fontFamily: "inherit", lineHeight: 1.45, resize: "vertical" }} />
+              </div>
+            ))}
+            <Button onClick={submitWritten} disabled={grading || questions.some((_, i) => !(writtenAnswers[i] || "").trim())}>
+              {grading ? "Проверяю…" : "Проверить"}
+            </Button>
             <button type="button" onClick={() => finish(answersRef.current, quizKnownRef.current, null, matchOkRef.current)}
               style={{ display: "block", width: "100%", marginTop: 10, border: "none", background: "transparent", color: t.sub, fontSize: 14, fontFamily: "inherit", cursor: "pointer", padding: 10 }}>
               Пропустить
@@ -1074,8 +1318,13 @@ export default function Quiz() {
           </>
         ) : (
           <div style={{ padding: 16, borderRadius: 16, border: `1px solid ${t.border}`, background: t.surface }}>
-            <div style={{ color: t.text, fontSize: 28, fontWeight: 700, marginBottom: 8 }}>{writtenResult.grade}/5</div>
-            <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.45 }}>{writtenResult.comment}</div>
+            <div style={{ color: t.text, fontSize: 28, fontWeight: 700, marginBottom: 14 }}>{writtenResult.grade}/5</div>
+            {(writtenResult.questions || []).map((r, i) => (
+              <div key={i} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: i < writtenResult.questions.length - 1 ? `1px solid ${t.border}` : "none" }}>
+                <div style={{ color: t.text, fontSize: 14, fontWeight: 600, marginBottom: 4 }}><MathText text={r.prompt} /></div>
+                <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45 }}>{r.grade}/5 · {r.comment || "—"}</div>
+              </div>
+            ))}
           </div>
         )}
         {saveModal}

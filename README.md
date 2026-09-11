@@ -55,9 +55,16 @@ LLM-вызовы идут напрямую из браузера в Polza AI (с
 `client/public/manifest.json` + `sw.js`. Service worker регистрируется только в
 production-сборке. Иконки: `favicon.svg` (можно заменить на PNG в manifest).
 
+После деплоя Hosting:
+
+1. Баннер «Доступна новая версия» внутри приложения (waiting SW + `app/release`).
+2. Опционально Web Push: `VITE_FIREBASE_VAPID_KEY`, в настройках «Уведомления об обновлениях»,
+   затем `npm run notify-update` (нужен `serviceAccount.json` + `firebase-admin`).
+
 ## Схема Firestore
 
-- `users/{uid}` — профиль
+- `users/{uid}` — профиль (`fcm_token`, `push_enabled` для пушей)
+- `app/release` — маркер версии для баннера (пишет только Admin SDK)
 - `subjects` — `{owner_id, name}` (виден только владельцу)
 - `notes` — `{owner_id, shared_with[], subject_id, title, text, topics[], plan[]}`
 - `tests` — `{owner_id, shared_with[], note_ids[], type, questions[]}`

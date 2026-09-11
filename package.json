@@ -1,10 +1,12 @@
 {
   "name": "zubrilka",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "npm --prefix client run dev",
     "dev:server": "npm --prefix server run dev",
     "build": "npm --prefix client run build",
-    "lint": "npm --prefix client run lint"
+    "lint": "npm --prefix client run lint",
+    "notify-update": "node scripts/notify-update.mjs"
   }
 }

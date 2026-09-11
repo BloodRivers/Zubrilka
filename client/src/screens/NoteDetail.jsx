@@ -1,21 +1,25 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { BookmarkPlus } from "lucide-react";
+import { BookmarkPlus, Plus } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import Accordion from "../components/Accordion";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
+import SharedAuthorBar from "../components/AuthorBar";
+import MathText from "../components/MathText";
 import SaveToSubjectModal from "../components/SaveToSubjectModal";
 import { GhostNote, useGhostHold } from "../components/Ghost";
 import { getNote, listSubjects, copyNoteToSubject, listTestsForNotes, listPublicTestsForNote } from "../api/firestore";
+import { testSizeLabel } from "../api/backend";
 
 function testHasContent(t) {
   return (t?.questions?.length || 0) > 0
     || (t?.quizlet?.length || 0) > 0
     || (t?.match?.length || 0) > 0
-    || Boolean(t?.written?.prompt);
+    || Boolean(t?.written?.prompt)
+    || (t?.written?.questions?.length || 0) > 0;
 }
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV"];
@@ -27,36 +31,38 @@ function normalizePlan(plan) {
   return plan.map((node) => {
     if (typeof node === "string") {
       const title = node.trim();
-      return title ? { title, items: [] } : null;
+      return title ? { title, summary: "", items: [] } : null;
     }
     const title = String(node?.title || node?.text || "").trim();
     if (!title) return null;
+    const summary = String(node?.summary || "").trim();
     const raw = node?.items ?? node?.children;
     const items = Array.isArray(raw)
       ? raw.map((child) => {
           if (typeof child === "string") {
             const t = child.trim();
-            return t ? { title: t, items: [] } : null;
+            return t ? { title: t, summary: "", items: [] } : null;
           }
           const t = String(child?.title || child?.text || "").trim();
           if (!t) return null;
           const leaves = child?.items ?? child?.children;
           return {
             title: t,
+            summary: String(child?.summary || "").trim(),
             items: Array.isArray(leaves)
               ? leaves.map((leaf) => {
                   if (typeof leaf === "string") {
                     const lt = leaf.trim();
-                    return lt ? { title: lt } : null;
+                    return lt ? { title: lt, summary: "" } : null;
                   }
                   const lt = String(leaf?.title || leaf?.text || "").trim();
-                  return lt ? { title: lt } : null;
+                  return lt ? { title: lt, summary: String(leaf?.summary || "").trim() } : null;
                 }).filter(Boolean)
               : [],
           };
         }).filter(Boolean)
       : [];
-    return { title, items };
+    return { title, summary, items };
   }).filter(Boolean);
 }
 
@@ -68,36 +74,66 @@ function PlanMarker({ label, t }) {
   );
 }
 
-function PlanRow({ label, title, t, pad = 0, strong = false }) {
+function PlanRow({ label, title, summary, t, pad = 0, strong = false }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", paddingLeft: pad }}>
       <PlanMarker label={label} t={t} />
-      <div style={{ color: t.text, fontSize: strong ? 15 : 14, fontWeight: strong ? 600 : 400, lineHeight: 1.45 }}>{title}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <MathText as="div" text={title} style={{ color: t.text, fontSize: strong ? 15 : 14, fontWeight: strong ? 600 : 400, lineHeight: 1.45 }} />
+        {summary && (
+          <MathText as="div" text={summary} style={{ color: t.sub, fontSize: 13, lineHeight: 1.5, marginTop: 4, whiteSpace: "pre-wrap" }} />
+        )}
+      </div>
     </div>
   );
 }
 
-function StudyPlan({ plan, t }) {
+function InteractivePlan({ plan, t }) {
   const sections = normalizePlan(plan);
+  const [open, setOpen] = useState(null);
   if (!sections.length) {
     return <div style={{ color: t.sub, fontSize: 14, padding: "12px 0" }}>Плана пока нет.</div>;
   }
   return (
     <div>
       {sections.map((section, i) => (
-        <div key={i} style={{ marginBottom: section.items?.length ? 6 : 0 }}>
-          <PlanRow label={`${toRoman(i)}.`} title={section.title} t={t} strong />
+        <Accordion
+          key={i}
+          title={`${toRoman(i)}. ${section.title}`}
+          open={open === i}
+          onToggle={() => setOpen(open === i ? null : i)}
+        >
+          {section.summary && (
+            <MathText
+              text={section.summary}
+              style={{ color: t.sub, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 10 }}
+            />
+          )}
           {(section.items || []).map((item, j) => (
             <div key={j}>
-              <PlanRow label={`${j + 1}.`} title={item.title} t={t} pad={18} />
+              <PlanRow label={`${j + 1}.`} title={item.title} summary={item.summary} t={t} pad={18} />
               {(item.items || []).map((leaf, k) => (
-                <PlanRow key={k} label={`${toLetter(k)}.`} title={leaf.title} t={t} pad={40} />
+                <PlanRow key={k} label={`${toLetter(k)}.`} title={leaf.title} summary={leaf.summary} t={t} pad={40} />
               ))}
             </div>
           ))}
-        </div>
+        </Accordion>
       ))}
     </div>
+  );
+}
+
+function AuthorBar({ note, t, navigate }) {
+  return (
+    <SharedAuthorBar
+      name={note.author_name}
+      photoUrl={note.author_photo_url}
+      uid={note.author_uid}
+      label="автор конспекта"
+      from={`/note/${note.id}`}
+      t={t}
+      navigate={navigate}
+    />
   );
 }
 
@@ -108,13 +144,11 @@ export default function NoteDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const [note, setNote] = useState(null);
-  const [openTopic, setOpenTopic] = useState(null);
-  const [tab, setTab] = useState("retelling");
+  const [tab, setTab] = useState("plan");
   const [saveOpen, setSaveOpen] = useState(false);
   const [subjects, setSubjects] = useState([]);
   const [saving, setSaving] = useState(false);
-  /** @type {null | { kind: "own" } | { kind: "public", testId: string }} */
-  const [quizAction, setQuizAction] = useState(null);
+  const [tests, setTests] = useState([]);
   const showGhost = useGhostHold(!note);
 
   useEffect(() => {
@@ -132,11 +166,11 @@ export default function NoteDetail() {
         if (foreign) {
           const pubs = (await listPublicTestsForNote(noteId).catch(() => []))
             .filter(testHasContent);
-          setQuizAction(pubs[0] ? { kind: "public", testId: pubs[0].id } : null);
+          setTests(pubs);
         } else {
           const own = (await listTestsForNotes([noteId]).catch(() => []))
             .filter(testHasContent);
-          setQuizAction(own.length ? { kind: "own" } : null);
+          setTests(own);
         }
       } catch {
         if (!cancelled) setNote({ id: noteId, missing: true });
@@ -148,16 +182,16 @@ export default function NoteDetail() {
   const isForeign = Boolean(
     note && !note.missing && note.owner_id && note.owner_id !== auth.currentUser?.uid
   );
+  const isGuest = !!auth.currentUser?.isAnonymous;
 
   const tabs = useMemo(() => {
     if (!note || note.missing) return [];
     const list = [];
-    if (note.retelling?.trim()) list.push({ v: "retelling", label: "Пересказ" });
-    if (normalizePlan(note.plan).length) list.push({ v: "plan", label: "План" });
-    if ((note.topics || []).length) list.push({ v: "topics", label: "Темы" });
+    if (normalizePlan(note.plan).length || note.retelling?.trim()) list.push({ v: "plan", label: "План" });
     if (note.text?.trim()) list.push({ v: "text", label: "Текст" });
+    list.push({ v: "tests", label: "Тесты", badge: tests.length });
     return list;
-  }, [note]);
+  }, [note, tests]);
 
   useEffect(() => {
     if (!tabs.length) return;
@@ -199,11 +233,19 @@ export default function NoteDetail() {
     );
   }
 
+  const hasPlan = normalizePlan(note.plan).length;
+  const retellingOnly = !hasPlan && note.retelling?.trim();
+
   return (
     <div>
-      <div style={{ color: t.sub, fontSize: 13, marginBottom: 2 }}>
-        {[location.state?.subjectName, note.author_name, note.created_at?.toDate?.().toLocaleDateString("ru-RU")].filter(Boolean).join(" · ")}
-      </div>
+      {!isForeign && (
+        <div style={{ color: t.sub, fontSize: 13, marginBottom: 2 }}>
+          {[location.state?.subjectName, note.created_at?.toDate?.().toLocaleDateString("ru-RU")].filter(Boolean).join(" · ")}
+        </div>
+      )}
+      {isForeign && (
+        <AuthorBar note={note} t={t} navigate={navigate} />
+      )}
       <div style={{ color: t.text, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16 }}>{note.title}</div>
 
       {tabs.length > 0 && (
@@ -216,31 +258,74 @@ export default function NoteDetail() {
         />
       )}
 
-      {tab === "retelling" && note.retelling?.trim() && (
-        <div style={{ color: t.text, fontSize: 15, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-          {note.retelling.trim()}
-        </div>
-      )}
-
-      {tab === "plan" && <StudyPlan plan={note.plan} t={t} />}
-
-      {tab === "topics" && (
-        (note.topics || []).length === 0 ? (
-          <div style={{ color: t.sub, fontSize: 14 }}>Тем пока нет.</div>
-        ) : (
-          (note.topics || []).map((topic, i) => (
-            <Accordion key={i} title={topic.title} open={openTopic === i} onToggle={() => setOpenTopic(openTopic === i ? null : i)}>
-              {(topic.points || []).map((p, j) => (
-                <div key={j} style={{ color: t.sub, fontSize: 14, padding: "5px 0", paddingLeft: 4 }}>— {p}</div>
-              ))}
-            </Accordion>
-          ))
-        )
+      {tab === "plan" && (
+        <>
+          {retellingOnly && (
+            <div style={{ color: t.text, fontSize: 15, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+              {note.retelling.trim()}
+            </div>
+          )}
+          {hasPlan ? <InteractivePlan plan={note.plan} t={t} /> : !retellingOnly && (
+            <div style={{ color: t.sub, fontSize: 14 }}>Плана пока нет.</div>
+          )}
+        </>
       )}
 
       {tab === "text" && note.text?.trim() && (
-        <div style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-          {note.text.trim()}
+        <MathText
+          text={note.text.trim()}
+          style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
+        />
+      )}
+
+      {tab === "tests" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {tests.length === 0 && (
+            <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.5, padding: "4px 0 14px" }}>
+              Тестов по этому конспекту пока нет.
+            </div>
+          )}
+          {tests.map((test) => {
+            const sizeLabel = testSizeLabel(test);
+            const parts = [];
+            if (test.questions?.length) parts.push(`${test.questions.length} вопр.`);
+            if (test.quizlet?.length) parts.push(`${test.quizlet.length} карт.`);
+            if (test.match?.length) parts.push(`${test.match.length} пар`);
+            if (test.written?.prompt || test.written?.questions?.length) parts.push("письм.");
+            return (
+              <button
+                key={test.id}
+                type="button"
+                className="rowpress"
+                onClick={() => navigate(`/test/${test.id}/quiz/full`, { state: { from: `/note/${noteId}` } })}
+                style={{
+                  width: "100%",
+                  display: "block",
+                  textAlign: "left",
+                  padding: "13px 15px",
+                  borderRadius: 14,
+                  border: `1px solid ${t.border}`,
+                  background: t.surface,
+                  color: t.text,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{test.title || "Тест"}</div>
+                {sizeLabel ? <div style={{ color: t.sub, fontSize: 12, marginTop: 5 }}>{sizeLabel}</div> : parts.length > 0 && <div style={{ color: t.sub, fontSize: 12, marginTop: 5 }}>{parts.join(" · ")}</div>}
+              </button>
+            );
+          })}
+          {!isGuest && !isForeign && (
+            <Button
+              variant="dashed"
+              onClick={() => navigate(`/note/${noteId}/quiz`, { state: { create: true, subjectName: location.state?.subjectName } })}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <Plus size={16} /> Новый тест
+              </span>
+            </Button>
+          )}
         </div>
       )}
 
@@ -255,23 +340,6 @@ export default function NoteDetail() {
               <BookmarkPlus size={16} />
               {saving ? "Сохраняю…" : "Сохранить к себе"}
             </span>
-          </Button>
-        )}
-        {quizAction && (
-          <Button
-            onClick={() => {
-              if (quizAction.kind === "public") {
-                navigate(`/test/${quizAction.testId}/quiz/full`, {
-                  state: { from: location.state?.from || `/note/${noteId}` },
-                });
-              } else {
-                navigate(`/note/${noteId}/quiz`, {
-                  state: { subjectName: location.state?.subjectName },
-                });
-              }
-            }}
-          >
-            Начать тест
           </Button>
         )}
       </div>

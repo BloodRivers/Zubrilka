@@ -13,6 +13,12 @@ const SYSTEM_OCR =
 const OCR_PROMPT =
   "Перепиши весь видимый текст с фото ниже. Без JSON, без комментариев, без повторов.";
 
+const SYSTEM_PROOFREAD =
+  "Ты вычитчик распознанного текста. На вход — те же фото и черновой транскрипт OCR. "
+  + "Сверь транскрипт с изображением и исправь ошибки распознавания: перепутанные слова, "
+  + "испорченные формулы/индексы, потерянные переносы, слипшиеся строки. "
+  + "Верни ТОЛЬКО исправленный текст. Ничего не добавляй и не пересказывай — только то, что на фото.";
+
 const SYSTEM_STRUCTURE =
   "Ты помощник по учёбе. На вход — уже распознанный текст конспекта. "
   + "Не выдумывай факты вне текста. Не повторяй блоки. "
@@ -20,49 +26,76 @@ const SYSTEM_STRUCTURE =
   + '{"subject":"предмет или пусто","title":"короткое название",'
   + '"text":"очищенный текст конспекта без дублей",'
   + '"retelling":"связный пересказ всего конспекта своими словами",'
-  + '"topics":[{"title":"тема","points":["пункт"]}],'
-  + '"plan":[{"title":"раздел","items":[{"title":"пункт","items":[{"title":"подпункт"}]}]}]}. '
-  + "topics/plan/retelling только из text. "
+  + '"plan":[{"title":"раздел","summary":"краткое содержание раздела 1–2 предложения","items":[{"title":"пункт","summary":"краткое содержание","items":[{"title":"подпункт","summary":"краткое содержание"}]}]}]}. '
+  + "plan/retelling только из text. "
   + "retelling — краткий, но объёмный: охвати все темы и ключевые идеи, "
   + "без списков и без новых фактов; 1–3 плотных абзаца. "
-  + "plan — СЛОЖНЫЙ план повторения с иерархией: "
-  + "уровень 0 (разделы) обязателен всегда; "
-  + "уровень 1 (пункты) и уровень 2 (подпункты) — по необходимости, могут отсутствовать; "
-  + "в JSON пиши только title и items (нумерацию I/1/а рисует интерфейс). "
-  + "Делай план содержательным и разветвлённым по материалу конспекта.";
+  + "plan — ПОЛНЫЙ иерархический план повторения, охватывающий весь материал: "
+  + "уровень 0 (разделы) — всегда минимум 3 раздела, для большого конспекта — 5–8; "
+  + "каждый раздел — всегда минимум 2–3 пункта, для крупных тем — 4–6 пунктов; "
+  + "уровень 2 (подпункты) — для крупных пунктов 2–4 подпункта, для мелких может отсутствовать; "
+  + "у каждого узла плана — summary своими словами: у разделов 2–3 предложения (ключевые идеи и связи), у пунктов 1–2 предложения, у подпунктов — одно короткое; "
+  + "в JSON пиши только title/summary/items (нумерацию I/1/а рисует интерфейс). "
+  + "plan ОБЯЗАТЕЛЕН и никогда не пуст. "
+  + "ВСЮ математику (формулы, выражения, индексы) в text и plan пиши в LaTeX: инлайн — $...$, отдельная строка — $$...$$; без них математика не отобразится.";
+
+/** Когда полный текст уже есть (PDF/файл) — ИИ не должен его переписывать и обрезать. */
+const SYSTEM_STRUCTURE_META =
+  "Ты помощник по учёбе. На вход — полный текст конспекта (уже извлечён). "
+  + "Не выдумывай факты вне текста. Не сокращай и не переписывай исходник в ответе. "
+  + "Верни ТОЛЬКО JSON БЕЗ поля text: "
+  + '{"subject":"предмет или пусто","title":"короткое название",'
+  + '"retelling":"связный пересказ своими словами",'
+  + '"plan":[{"title":"раздел","summary":"краткое содержание раздела 1–2 предложения","items":[{"title":"пункт","summary":"краткое содержание","items":[{"title":"подпункт","summary":"краткое содержание"}]}]}]}. '
+  + "plan/retelling только из входного текста. "
+  + "retelling — 1–3 плотных абзаца по всем темам. "
+  + "plan — полный иерархический план повторения (title + summary + items), охватывающий весь материал: минимум 3 раздела, у каждого раздела 2–6 пунктов, у крупных пунктов — подпункты; summaries своими словами (у разделов 2–3 предложения, у пунктов 1–2). "
+  + "plan ОБЯЗАТЕЛЕН и никогда не пуст. "
+  + "ВСЮ математику (формулы, выражения, индексы) в retelling и plan пиши в LaTeX: инлайн — $...$, отдельная строка — $$...$$; без них математика не отобразится.";
+
 
 function normalizePlan(plan) {
+  if (typeof plan === "string" && plan.trim()) {
+    return plan
+      .split(/\n+/)
+      .map((l) => l.replace(/^[\s\d.▪•-]+/, "").trim())
+      .filter(Boolean)
+      .map((title) => ({ title, summary: "", items: [] }));
+  }
   if (!Array.isArray(plan)) return [];
   return plan
     .map((node) => {
       if (typeof node === "string") {
         const title = node.trim();
-        return title ? { title, items: [] } : null;
+        return title ? { title, summary: "", items: [] } : null;
       }
       const title = String(node?.title || node?.text || "").trim();
       if (!title) return null;
+      const summary = String(node?.summary || "").trim();
       const raw = node?.items ?? node?.children;
       const items = Array.isArray(raw)
         ? raw
             .map((child) => {
               if (typeof child === "string") {
                 const t = child.trim();
-                return t ? { title: t, items: [] } : null;
+                return t ? { title: t, summary: "", items: [] } : null;
               }
               const t = String(child?.title || child?.text || "").trim();
               if (!t) return null;
+              const csum = String(child?.summary || "").trim();
               const leaves = child?.items ?? child?.children;
               return {
                 title: t,
+                summary: csum,
                 items: Array.isArray(leaves)
                   ? leaves
                       .map((leaf) => {
                         if (typeof leaf === "string") {
                           const lt = leaf.trim();
-                          return lt ? { title: lt } : null;
+                          return lt ? { title: lt, summary: "" } : null;
                         }
                         const lt = String(leaf?.title || leaf?.text || "").trim();
-                        return lt ? { title: lt } : null;
+                        return lt ? { title: lt, summary: String(leaf?.summary || "").trim() } : null;
                       })
                       .filter(Boolean)
                   : [],
@@ -70,7 +103,7 @@ function normalizePlan(plan) {
             })
             .filter(Boolean)
         : [];
-      return { title, items };
+      return { title, summary, items };
     })
     .filter(Boolean);
 }
@@ -78,14 +111,37 @@ function normalizePlan(plan) {
 export const ALL_TEST_MODES = ["single", "multi", "quizlet", "match", "written"];
 const Q_MAX = 120;
 const OPT_MAX = 60;
-const SINGLE_TARGET = 10;
-const MULTI_TARGET = 5;
-const QUIZLET_TARGET = 10;
-const MATCH_TARGET = 8;
+
+export const TEST_SIZES = {
+  express: { single: 5, multi: 3, quizlet: 5, match: 4, written: 2, label: "Экспресс", hint: "меньше вопросов — быстрее" },
+  standard: { single: 10, multi: 5, quizlet: 10, match: 8, written: 3, label: "Стандарт", hint: "сбалансированный объём" },
+  intense: { single: 12, multi: 6, quizlet: 12, match: 10, written: 3, label: "Интенсив", hint: "ближе к максимуму" },
+  max: { single: 15, multi: 8, quizlet: 15, match: 12, written: 4, label: "Максимум", hint: "побольше вопросов на повтор" },
+};
+const DEFAULT_COUNTS = TEST_SIZES.standard;
+
+export function testSizeLabel(test) {
+  if (!test) return "";
+  const matchSize = TEST_SIZES[test.size];
+  if (matchSize) return matchSize.label;
+  const got = {
+    single: (test.questions || []).filter((q) => q.kind === "single").length,
+    multi: (test.questions || []).filter((q) => q.kind === "multi").length,
+    quizlet: (test.quizlet || []).length,
+    match: (test.match || []).length,
+  };
+  for (const key of Object.keys(TEST_SIZES)) {
+    const c = TEST_SIZES[key];
+    if (c.single === got.single && c.multi === got.multi && c.quizlet === got.quizlet && c.match === got.match) return c.label;
+  }
+  return "";
+}
 
 const SYSTEM_GRADE =
-  "Ты строгий, но доброжелательный преподаватель. "
-  + "Оцениваешь ТОЛЬКО по конспекту. "
+  "Ты строгий, но доброжелательный преподаватель, проверяешь контрольную. "
+  + "Ученику был задан конкретный вопрос. Оцениваешь ТОЛЬКО его ответ на этот вопрос по конспекту. "
+  + "Не пересказывай конспект, не оценивай оформление и длину ответа — только содержательность ответа на вопрос. "
+  + "Если ответ в целом верный по конспекту — высокая оценка, пропущенные сущности снижают. "
   + 'Верни ТОЛЬКО JSON: {"grade":5,"comment":"что верно и что упущено"}. grade 1–5.';
 
 function buildNoteContext(notes) {
@@ -94,14 +150,6 @@ function buildNoteContext(notes) {
       const parts = [];
       if (n.title) parts.push(`# ${n.title}`);
       if (n.retelling?.trim()) parts.push(`Пересказ:\n${n.retelling.trim()}`);
-      if (Array.isArray(n.topics) && n.topics.length) {
-        parts.push(
-          "Темы:\n"
-            + n.topics
-              .map((tp) => `- ${tp.title}: ${(tp.points || []).join("; ")}`)
-              .join("\n")
-        );
-      }
       if (n.text?.trim()) parts.push(`Текст:\n${n.text.trim()}`);
       return parts.join("\n\n");
     })
@@ -110,7 +158,7 @@ function buildNoteContext(notes) {
     .slice(0, 14000);
 }
 
-function buildTestSystem(modes) {
+function buildTestSystem(modes, counts = DEFAULT_COUNTS) {
   const wantSingle = modes.includes("single");
   const wantMulti = modes.includes("multi");
   const wantQuizlet = modes.includes("quizlet");
@@ -130,7 +178,7 @@ function buildTestSystem(modes) {
       '"match":[{"left":"короткая левая часть","right":"связанная правая часть","topic":"тема"}]'
     );
   }
-  if (wantWritten) parts.push('"written":{"prompt":"задание написать своими словами"}');
+  if (wantWritten) parts.push('"written":[{"prompt":"задание-вопрос по конспекту"}]');
   const schema = "{" + parts.join(",") + "}";
 
   return (
@@ -140,19 +188,19 @@ function buildTestSystem(modes) {
     + `Вопрос ≤${Q_MAX} символов, вариант ответа ≤${OPT_MAX} символов. `
     + "Запрещено: «Вспомни пункт», Да/Нет, копипаст фраз конспекта, факты вне текста. "
     + (wantSingle
-      ? `single: ровно ${SINGLE_TARGET} вопросов, kind="single", correct — ЧИСЛО 0..3 (один верный). `
+      ? `single: ровно ${counts.single} вопросов, kind="single", correct — ЧИСЛО 0..3 (один верный). `
       : "")
     + (wantMulti
-      ? `multi: ровно ${MULTI_TARGET} вопросов, kind="multi", correct — МАССИВ из 2–3 индексов 0..3. `
+      ? `multi: ровно ${counts.multi} вопросов, kind="multi", correct — МАССИВ из 2–3 индексов 0..3. `
       : "")
     + (wantQuizlet
-      ? `quizlet: ровно ${QUIZLET_TARGET} карточек термин↔краткое определение. `
+      ? `quizlet: ровно ${counts.quizlet} карточек термин↔краткое определение. `
       : "")
     + (wantMatch
-      ? `match: ровно ${MATCH_TARGET} пар для сопоставления. left и right — любые связанные фрагменты из конспекта (понятие↔смысл, причина↔следствие, дата↔событие, формула↔название и т.п.); тип пар выбирай по материалу. Пары уникальны, без дублей left/right. `
+      ? `match: ровно ${counts.match} пар для сопоставления. left и right — любые связанные фрагменты из конспекта (понятие↔смысл, причина↔следствие, дата↔событие, формула↔название и т.п.); тип пар выбирай по материалу. Пары уникальны, без дублей left/right. `
       : "")
     + (wantWritten
-      ? "written: одно короткое задание написать ответ своими словами по конспекту. "
+      ? `written: ровно ${counts.written} заданий-вопросов по конспекту (например, «Объясни, почему…», «Перечисли причины…», «Сравни…»). Если в конспекте есть математика (формулы, $...$), до половины заданий делай математическими (вычислить/выразить/сравнить), формулы пиши в $...$ — это обычный текст внутри строки JSON. Ученик пишет ответ своими словами на каждый вопрос. `
       : "")
     + `Формат: ${schema}`
   );
@@ -198,7 +246,7 @@ function shuffleWithCorrect(options, correct) {
   return { options: opts, correct: opts.indexOf(answers[0]) };
 }
 
-export function normalizeQuestions(payload, modes = null) {
+export function normalizeQuestions(payload, modes = null, counts = DEFAULT_COUNTS) {
   const list = Array.isArray(payload) ? payload : payload?.questions;
   if (!Array.isArray(list)) return [];
   const allowSingle = !modes || modes.includes("single");
@@ -244,8 +292,8 @@ export function normalizeQuestions(payload, modes = null) {
     });
   }
 
-  const singles = cleaned.filter((q) => q.kind === "single").slice(0, SINGLE_TARGET);
-  const multis = cleaned.filter((q) => q.kind === "multi").slice(0, MULTI_TARGET);
+  const singles = cleaned.filter((q) => q.kind === "single").slice(0, counts.single);
+  const multis = cleaned.filter((q) => q.kind === "multi").slice(0, counts.multi);
   const out = [];
   let si = 0;
   let mi = 0;
@@ -257,7 +305,7 @@ export function normalizeQuestions(payload, modes = null) {
   return out;
 }
 
-export function normalizeQuizlet(payload) {
+export function normalizeQuizlet(payload, counts = DEFAULT_COUNTS) {
   const list = Array.isArray(payload) ? payload : payload?.quizlet;
   if (!Array.isArray(list)) return [];
   return list
@@ -267,10 +315,10 @@ export function normalizeQuizlet(payload) {
       topic: String(c?.topic || "Общее").trim() || "Общее",
     }))
     .filter((c) => c.term && c.definition)
-    .slice(0, QUIZLET_TARGET);
+    .slice(0, counts.quizlet);
 }
 
-export function normalizeMatch(payload) {
+export function normalizeMatch(payload, counts = DEFAULT_COUNTS) {
   const list = Array.isArray(payload) ? payload : payload?.match;
   if (!Array.isArray(list)) return [];
   const seenL = new Set();
@@ -290,31 +338,46 @@ export function normalizeMatch(payload) {
       right,
       topic: String(raw?.topic || "Общее").trim() || "Общее",
     });
-    if (out.length >= MATCH_TARGET) break;
+    if (out.length >= counts.match) break;
   }
   return out;
 }
 
-export function normalizeWritten(payload) {
+export function normalizeWritten(payload, count = 3) {
   const w = payload?.written;
   if (!w) return null;
-  const prompt = clip(typeof w === "string" ? w : w.prompt || "", 200);
-  return prompt ? { prompt } : null;
+  const list = Array.isArray(w) ? w : Array.isArray(w?.questions) ? w.questions : [w];
+  const out = [];
+  for (const x of list) {
+    const prompt = clip(typeof x === "string" ? x : x?.prompt || "", 260);
+    if (prompt) {
+      out.push({ prompt });
+      if (out.length >= count) break;
+    }
+  }
+  return out.length ? { questions: out } : null;
 }
 
-export function normalizeTestPayload(raw, modes) {
+export function writtenQuestionsOf(written) {
+  if (!written) return [];
+  if (Array.isArray(written?.questions) && written.questions.length) return written.questions;
+  if (written?.prompt) return [{ prompt: written.prompt }];
+  return [];
+}
+
+export function normalizeTestPayload(raw, modes, counts = DEFAULT_COUNTS) {
   const m = (modes || ALL_TEST_MODES).filter((x) => ALL_TEST_MODES.includes(x));
   return {
     type: "mixed",
     modes: m,
-    questions: m.some((x) => x === "single" || x === "multi") ? normalizeQuestions(raw, m) : [],
-    quizlet: m.includes("quizlet") ? normalizeQuizlet(raw) : [],
-    match: m.includes("match") ? normalizeMatch(raw) : [],
-    written: m.includes("written") ? normalizeWritten(raw) : null,
+    questions: m.some((x) => x === "single" || x === "multi") ? normalizeQuestions(raw, m, counts) : [],
+    quizlet: m.includes("quizlet") ? normalizeQuizlet(raw, counts) : [],
+    match: m.includes("match") ? normalizeMatch(raw, counts) : [],
+    written: m.includes("written") ? normalizeWritten(raw, counts.written) : null,
   };
 }
 
-async function analyzeFromPhotos(imageDataUrl) {
+async function ocrFromPhotos(imageDataUrl) {
   await assertVisionWorks(imageDataUrl);
 
   const raw = await aiText({
@@ -324,27 +387,75 @@ async function analyzeFromPhotos(imageDataUrl) {
     imageDataUrl,
     maxTokens: 2500,
   });
-  const text = collapseRepeats(raw);
-  if (text.length < 30) {
+  const draft = collapseRepeats(raw);
+  if (draft.length < 30) {
     throw new Error("Не удалось прочитать текст с фото — сделай кадр чётче или вставь текст вручную");
   }
 
+  // Второй проход: вычитка — модель сверяет транскрипт с фото и правит ошибки OCR.
+  try {
+    const fixed = await aiText({
+      name: "ocr-proofread",
+      system: SYSTEM_PROOFREAD,
+      prompt: `Черновой транскрипт:\n\n${draft.slice(0, 12000)}`,
+      imageDataUrl,
+      maxTokens: 2500,
+    });
+    const corrected = collapseRepeats(fixed);
+    return corrected.length >= 30 ? corrected : draft;
+  } catch {
+    return draft;
+  }
+}
+
+/**
+ * Структурировать уже готовый текст конспекта (фото/PDF/txt/ручной ввод).
+ * @param {string} transcript
+ * @param {{ keepSourceText?: boolean }} [opts]
+ *   keepSourceText — сохранить полный исходник в note.text (для PDF/файлов),
+ *   ИИ заполняет только title/plan/retelling.
+ */
+export async function structureNote(transcript, opts = {}) {
+  const keepSourceText = Boolean(opts.keepSourceText);
+  const text = collapseRepeats(String(transcript || "").trim());
+  if (text.length < 20) {
+    throw new Error("Слишком мало текста для анализа — добавь файл, фото или вставь текст");
+  }
+
+  // PDF/длинный текст: больше контекста для тем/плана; полный текст в JSON не просим
+  const promptLimit = keepSourceText || text.length > 10000 ? 80000 : 24000;
   const structured = await aiJSON({
     name: "structure-note",
-    system: SYSTEM_STRUCTURE,
-    prompt: `Собери JSON по этому транскрипту. Не добавляй ничего от себя.\n\n${text.slice(0, 12000)}`,
-    maxTokens: 3000,
+    system: keepSourceText || text.length > 10000 ? SYSTEM_STRUCTURE_META : SYSTEM_STRUCTURE,
+    prompt:
+      `Собери JSON по этому транскрипту. Не добавляй ничего от себя.\n\n`
+      + text.slice(0, promptLimit),
+    maxTokens: keepSourceText || text.length > 10000 ? 6000 : 8000,
   });
 
-  structured.text = collapseRepeats(structured.text || text);
+  if (keepSourceText || text.length > 10000) {
+    structured.text = text;
+  } else {
+    const modelText = collapseRepeats(structured.text || "");
+    // если модель заметно укоротила — оставляем исходник
+    structured.text = modelText && modelText.length >= text.length * 0.85 ? modelText : text;
+  }
   if (!structured.title) structured.title = "Конспект";
   structured.retelling = String(structured.retelling || "").trim();
-  if (!Array.isArray(structured.topics)) structured.topics = [];
   structured.plan = normalizePlan(structured.plan);
   return structured;
 }
 
+
+async function analyzeFromPhotos(imageDataUrl) {
+  const text = await ocrFromPhotos(imageDataUrl);
+  return structureNote(text);
+}
+
 export const analyzeNote = analyzeFromPhotos;
+/** Только OCR с фото (без структурирования) — для сборки с PDF/текстом. */
+export const ocrNotePhotos = ocrFromPhotos;
+
 
 export async function generateTest(noteIds, modesOrType) {
   const modes = Array.isArray(modesOrType)
@@ -352,6 +463,10 @@ export async function generateTest(noteIds, modesOrType) {
     : typeof modesOrType === "object" && modesOrType?.modes
       ? modesOrType.modes
       : ["single"];
+  const size = typeof modesOrType === "object" && modesOrType?.size;
+  const counts = Object.prototype.hasOwnProperty.call(TEST_SIZES, size)
+    ? TEST_SIZES[size]
+    : DEFAULT_COUNTS;
   const selected = [...new Set(modes)].filter((m) => ALL_TEST_MODES.includes(m));
   if (!selected.length) throw new Error("Выбери хотя бы один тип заданий");
 
@@ -361,18 +476,19 @@ export async function generateTest(noteIds, modesOrType) {
 
   const raw = await aiJSON({
     name: "generate-test",
-    system: buildTestSystem(selected),
+    system: buildTestSystem(selected, counts),
     prompt: `Собери JSON только по материалу ниже. Режимы: ${selected.join(", ")}.\n\nКонспект:\n${text}`,
-    maxTokens: 5000,
+    maxTokens: 6000,
   });
 
-  const normalized = normalizeTestPayload(raw, selected);
+  const normalized = normalizeTestPayload(raw, selected, counts);
   const hasChoice = normalized.questions.length > 0;
   const hasQuizlet = normalized.quizlet.length > 0;
   const hasMatch = (normalized.match?.length || 0) > 0;
   const hasWritten = Boolean(normalized.written);
   if (selected.includes("single") || selected.includes("multi")) {
-    if (normalized.questions.length < 4) {
+    const floor = Math.max(3, Math.ceil(counts.single * 0.6));
+    if (normalized.questions.length < floor) {
       throw new Error("Модель вернула слишком мало нормальных вопросов — попробуй ещё раз");
     }
   }
@@ -391,10 +507,10 @@ export async function generateTest(noteIds, modesOrType) {
   return normalized;
 }
 
-export const gradeWritten = (noteText, answer) =>
+export const gradeWritten = (noteText, question, answer) =>
   aiJSON({
     name: "grade-written",
     system: SYSTEM_GRADE,
-    prompt: `Конспект:\n${String(noteText).slice(0, 12000)}\n\nОтвет ученика:\n${answer}`,
+    prompt: `Конспект:\n${String(noteText).slice(0, 12000)}\n\nВопрос ученику:\n${String(question || "").slice(0, 400)}\n\nОтвет ученика:\n${answer}`,
     maxTokens: 800,
   });

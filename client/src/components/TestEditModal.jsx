@@ -5,7 +5,7 @@ import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "./Alert";
 import Button from "./Button";
 import Switch from "./Switch";
-import { setTestPublic, getTest, deleteTest } from "../api/firestore";
+import { setTestPublic, updateTest, getTest, deleteTest } from "../api/firestore";
 import { auth } from "../firebase";
 
 function FieldLabel({ children, t }) {
@@ -20,7 +20,7 @@ function FieldLabel({ children, t }) {
  * Модалка теста: публикация в библиотеке и удаление.
  * @param {{ open: boolean, testId: string, title?: string, onClose: () => void, onChanged?: () => void }} props
  */
-export default function TestEditModal({ open, testId, title, onClose, onChanged }) {
+export default function TestEditModal({ open, testId, title, subjectName, onClose, onChanged }) {
   const { t } = useTheme();
   const { alert } = useAlert();
   const [isPublic, setIsPublic] = useState(false);
@@ -71,9 +71,15 @@ export default function TestEditModal({ open, testId, title, onClose, onChanged 
 
   const save = async () => {
     if (!canEdit || busy || !testId) return;
+    const finalTitle = String(label || "").trim();
+    if (!finalTitle) {
+      alert("Введи название теста.");
+      return;
+    }
     setBusy(true);
     try {
-      await setTestPublic(testId, isPublic);
+      await updateTest(testId, { title: finalTitle });
+      await setTestPublic(testId, isPublic, subjectName);
       onChanged?.();
       requestClose();
     } catch (e) {
@@ -158,8 +164,30 @@ export default function TestEditModal({ open, testId, title, onClose, onChanged 
         </div>
 
         <div style={{ color: t.sub, fontSize: 13, marginBottom: 16, lineHeight: 1.4 }}>
-          {label}
+          Дай тесту понятное название — так проще его найти среди других.
         </div>
+
+        <FieldLabel t={t}>Название</FieldLabel>
+        <input
+          value={label}
+          disabled={!canEdit || busy}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Название теста"
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: "13px 16px",
+            borderRadius: 14,
+            border: `1px solid ${t.border}`,
+            background: t.raised,
+            color: t.text,
+            fontSize: 15,
+            fontFamily: "inherit",
+            outline: "none",
+            marginBottom: 16,
+            opacity: canEdit ? 1 : 0.6,
+          }}
+        />
 
         <FieldLabel t={t}>Параметры</FieldLabel>
         <button

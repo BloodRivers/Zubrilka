@@ -1,10 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Check, X } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 import Button from "../components/Button";
+import MathText from "../components/MathText";
 import TestEditModal from "../components/TestEditModal";
 import { peekReturnTo } from "../nav";
+import { sfx } from "../sfx";
+
+function joinMath(items) {
+  const clean = items.filter(Boolean);
+  if (!clean.length) return null;
+  return clean.reduce(
+    (acc, text, i) => (
+      <>
+        {acc}
+        {i > 0 && ", "}
+        <MathText as="span" text={text} />
+      </>
+    ),
+    null
+  );
+}
 
 export default function Results() {
   const { t } = useTheme();
@@ -26,6 +43,8 @@ export default function Results() {
   const testId = state?.testId;
   const from = state?.from;
   const [editOpen, setEditOpen] = useState(false);
+
+  useEffect(() => { sfx.win(); }, []);
 
   const goDone = () => {
     if (from) navigate(from, { replace: true, state: from.startsWith("/note/") ? { from: peekReturnTo() || undefined } : undefined });
@@ -143,22 +162,22 @@ export default function Results() {
                     {ok ? <Check size={13} strokeWidth={3} /> : <X size={13} strokeWidth={3} />}
                   </div>
                   <div style={{ color: t.text, fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>
-                    {i + 1}. {item.q}
+                    {i + 1}. <MathText as="span" text={item.q} />
                   </div>
                 </div>
                 {!ok && pickedList.length > 0 && item.options && (
                   <div style={{ color: t.sub, fontSize: 13, paddingLeft: 32, marginBottom: 4 }}>
-                    Твой ответ: {pickedList.map((p) => item.options[p]).filter(Boolean).join(", ")}
+                    Твой ответ: {joinMath(pickedList.map((p) => item.options[p]))}
                   </div>
                 )}
                 {item.options && (
                   <div style={{ color: t.text, fontSize: 13, paddingLeft: 32 }}>
-                    Верно: {correctList.map((p) => item.options[p]).filter(Boolean).join(", ")}
+                    Верно: {joinMath(correctList.map((p) => item.options[p]))}
                   </div>
                 )}
                 {item.explain?.trim() && (
                   <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45, marginTop: 8, paddingLeft: 32 }}>
-                    {item.explain.trim()}
+                    <MathText as="span" text={item.explain.trim()} />
                   </div>
                 )}
               </div>
@@ -167,11 +186,20 @@ export default function Results() {
         </div>
       )}
 
-      {written?.comment && (
+      {(written?.questions?.length || written?.comment) && (
         <div style={{ marginTop: 20, padding: 16, borderRadius: 16, border: `1px solid ${t.border}`, background: t.surface }}>
           <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Письменный ответ</div>
           <div style={{ color: t.text, fontSize: 20, fontWeight: 700, marginBottom: 6 }}>{written.grade}/5</div>
-          <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.45 }}>{written.comment}</div>
+          {Array.isArray(written.questions) ? (
+            written.questions.map((r, i) => (
+              <div key={i} style={{ marginTop: 8, paddingTop: 8, borderTop: i > 0 ? `1px solid ${t.border}` : "none" }}>
+                <div style={{ color: t.text, fontSize: 14, fontWeight: 600, marginBottom: 3 }}><MathText text={r.prompt} /></div>
+                <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45 }}>{r.grade}/5 · {r.comment || "—"}</div>
+              </div>
+            ))
+          ) : (
+            <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.45 }}>{written.comment}</div>
+          )}
         </div>
       )}
 

@@ -35,7 +35,7 @@ export function consumeReturnTo() {
 }
 
 export function tabOf(pathname) {
-  if (pathname.startsWith("/library")) return "/library";
+  if (pathname.startsWith("/library") || pathname.startsWith("/user")) return "/library";
   if (pathname.startsWith("/settings")) return "/settings";
   if (pathname.startsWith("/account")) return "/account";
   if (
@@ -43,6 +43,7 @@ export function tabOf(pathname) {
     || pathname.startsWith("/subject")
     || pathname.startsWith("/note")
     || pathname.startsWith("/test")
+    || pathname.startsWith("/trainer")
     || pathname.startsWith("/results")
   )
     return "/";
@@ -78,10 +79,13 @@ export function backOf(pathname, state) {
   const noteQuiz = pathname.match(/^\/note\/([^/]+)\/quiz/);
   if (noteQuiz) return `/note/${noteQuiz[1]}`;
 
+  if (/^\/trainer\//.test(pathname)) return resumeTab("/library") ?? "/library";
+
   const sc = pathname.match(/^\/subject\/([^/]+)\//);
   if (sc) return `/subject/${sc[1]}`;
   if (/^\/subject\//.test(pathname)) return "/";
   if (/^\/(note|test|results)/.test(pathname)) return resumeTab("/");
+  if (/^\/user\//.test(pathname)) return "/library";
   return null;
 }
 

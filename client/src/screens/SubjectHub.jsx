@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { Plus, Pin, X, FlaskConical, BookOpen } from "lucide-react";
+import { Plus, Pin, X, FlaskConical } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import Button from "../components/Button";
 import { GhostCards, useGhostHold } from "../components/Ghost";
-import Accordion from "../components/Accordion";
-import ResultCard, { bestResultsByTest } from "../components/ResultCard";
+import { bestResultsByTest } from "../components/ResultCard";
 import Segmented from "../components/Segmented";
 import TestEditModal from "../components/TestEditModal";
-import { listNotes, getSubject, updateNote, deleteNote, listResults, setNotePublic } from "../api/firestore";
+import { listNotes, getSubject, updateNote, deleteNote, listResults, setNotePublic, listTestsForSubject } from "../api/firestore";
+import { testSizeLabel } from "../api/backend";
 import { setScreenTitle } from "../nav";
 import Switch from "../components/Switch";
 
@@ -325,6 +325,7 @@ export default function SubjectHub() {
   const { t } = useTheme();
   const { alert } = useAlert();
   const [notes, setNotes] = useState([]);
+  const [tests, setTests] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const showGhost = useGhostHold(loading);
@@ -334,7 +335,6 @@ export default function SubjectHub() {
   const [editingTest, setEditingTest] = useState(null);
   const [pickNoteOpen, setPickNoteOpen] = useState(false);
   const [tab, setTab] = useState("notes");
-  const [openTopic, setOpenTopic] = useState(null);
   const location = useLocation();
 
   const load = async () => {
@@ -347,11 +347,14 @@ export default function SubjectHub() {
     setSubjectName(subj?.name || "");
     setScreenTitle(subj?.name || "");
     setNotes(ns);
-    const ids = new Set(ns.map((n) => n.id));
+    const ids = ns.map((n) => n.id);
+    const ts = await listTestsForSubject(subjectId, ids).catch(() => []);
+    setTests(ts);
     const filtered = rs.filter(
       (r) =>
         r.subject_id === subjectId
-        || (r.note_ids || []).some((id) => ids.has(id))
+        || (r.note_ids || []).some((id) => ids.includes(id))
+        || ts.some((t) => t.id === r.test_id)
     );
     setResults(bestResultsByTest(filtered));
     setLoading(false);
@@ -359,31 +362,17 @@ export default function SubjectHub() {
 
   useEffect(() => {
     setTab(location.state?.tab === "tests" ? "tests" : "notes");
-    setOpenTopic(null);
     load();
     return () => setScreenTitle(null);
   }, [subjectId]);
 
   const sorted = [...notes].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
-  const topics = (() => {
-    const m = new Map();
-    for (const n of notes) {
-      for (const tp of n.topics || []) {
-        if (!m.has(tp.title)) m.set(tp.title, { title: tp.title, points: [] });
-        for (const p of tp.points || []) {
-          if (!m.get(tp.title).points.includes(p)) m.get(tp.title).points.push(p);
-        }
-      }
-    }
-    return [...m.values()];
-  })();
-
   const onSave = async (initial, title, pinned, isPublic) => {
     try {
       await updateNote(initial.id, { title, pinned });
       if (Boolean(initial.public) !== Boolean(isPublic)) {
-        await setNotePublic(initial.id, isPublic);
+        await setNotePublic(initial.id, isPublic, subjectName);
       }
       setShowModal(false);
       await load();
@@ -404,8 +393,7 @@ export default function SubjectHub() {
 
   const TABS = [
     { v: "notes", label: "Конспекты", badge: notes.length },
-    { v: "topics", label: "Темы", badge: topics.length },
-    { v: "tests", label: "Тесты", badge: results.length },
+    { v: "tests", label: "Тесты", badge: tests.length },
   ];
 
   return (
@@ -439,29 +427,6 @@ export default function SubjectHub() {
             </span>
           </Button>
         </>
-      ) : tab === "topics" ? (
-        topics.length === 0 ? (
-          <EmptyState
-            icon={<BookOpen size={24} />}
-            title="Пока пусто"
-            sub="Темы из конспектов этого предмета появятся здесь."
-          />
-        ) : (
-          topics.map((topic, i) => (
-            <Accordion
-              key={topic.title}
-              title={topic.title}
-              open={openTopic === i}
-              onToggle={() => setOpenTopic(openTopic === i ? null : i)}
-            >
-              {(topic.points || []).map((p, j) => (
-                <div key={j} style={{ color: t.sub, fontSize: 14, padding: "5px 0", paddingLeft: 4 }}>
-                  — {p}
-                </div>
-              ))}
-            </Accordion>
-          ))
-        )
       ) : (
         <>
           {notes.length > 0 && (
@@ -478,21 +443,25 @@ export default function SubjectHub() {
               </Button>
             </div>
           )}
-          {results.length === 0 ? (
+          {tests.length === 0 ? (
             <EmptyState
               icon={<FlaskConical size={24} />}
               title="Пока пусто"
-              sub={notes.length === 0 ? "Сначала добавь конспект — потом сможешь создать тест." : "Создай тест по конспекту или по всему предмету — результаты появятся здесь."}
+              sub={notes.length === 0 ? "Сначала добавь конспект — потом сможешь создать тест." : "Создай тест по конспекту или по всему предмету — он появится здесь."}
             />
           ) : (
-            results.map((r, idx) => (
-              <ResultCard
-                key={r.test_id || r.id}
-                result={r}
-                idx={idx}
-                onLongPress={(res) => setEditingTest(res)}
-              />
-            ))
+            tests.map((test, idx) => {
+              const best = results.find((r) => r.test_id === test.id);
+              return (
+                <SavedTestCard
+                  key={test.id}
+                  test={test}
+                  best={best}
+                  idx={idx}
+                  onLongPress={() => setEditingTest({ test_id: test.id, title: test.title })}
+                />
+              );
+            })
           )}
         </>
       )}
@@ -508,6 +477,7 @@ export default function SubjectHub() {
         open={Boolean(editingTest)}
         testId={editingTest?.test_id}
         title={editingTest?.title}
+        subjectName={subjectName}
         onClose={() => setEditingTest(null)}
         onChanged={load}
       />
@@ -660,5 +630,82 @@ function EmptyState({ icon, title, sub }) {
       <div style={{ color: t.text, fontWeight: 600, fontSize: 15 }}>{title}</div>
       <div style={{ color: t.sub, fontSize: 14, marginTop: 6, lineHeight: 1.5 }}>{sub}</div>
     </div>
+  );
+}
+
+function SavedTestCard({ test, best, idx, onLongPress }) {
+  const { t } = useTheme();
+  const navigate = useNavigate();
+  const timer = useRef(null);
+  const fired = useRef(false);
+
+  const clear = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+
+  useEffect(() => () => clear(), []);
+
+  const onPointerDown = () => {
+    fired.current = false;
+    clear();
+    timer.current = setTimeout(() => {
+      fired.current = true;
+      onLongPress?.();
+    }, 450);
+  };
+
+  const onClick = (event) => {
+    clear();
+    if (fired.current) {
+      event.preventDefault();
+      return;
+    }
+    navigate(`/test/${test.id}/quiz/run`);
+  };
+
+  const modes = Array.isArray(test.modes) ? test.modes : [];
+  const sizeLabel = testSizeLabel(test);
+  const parts = [];
+  if (test.questions?.length) parts.push(`${test.questions.length} вопр.`);
+  if (test.quizlet?.length) parts.push(`${test.quizlet.length} карт.`);
+  if (test.match?.length) parts.push(`${test.match.length} пар`);
+  if (test.written?.prompt || test.written?.questions?.length) parts.push("письм.");
+  if (!parts.length && modes.length) parts.push(modes.join(" · "));
+  const subtitle = sizeLabel || parts.join(" · ") || "Тест сохранен";
+
+  return (
+    <button
+      type="button"
+      className="rowpress"
+      onPointerDown={onPointerDown}
+      onPointerUp={clear}
+      onPointerCancel={clear}
+      onClick={onClick}
+      style={{
+        width: "100%",
+        display: "block",
+        textAlign: "left",
+        padding: "14px 16px",
+        marginBottom: 8,
+        borderRadius: 16,
+        border: `1px solid ${t.border}`,
+        background: t.surface,
+        color: t.text,
+        fontFamily: "inherit",
+        cursor: "pointer",
+        animation: `riseIn 260ms ease-out ${idx * 45}ms both`,
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 5 }}>
+        {test.title || "Тест"}
+      </div>
+      <div style={{ color: t.sub, fontSize: 13 }}>
+        {subtitle}
+        {best && ` · лучший результат ${best.score ?? 0}/${best.total ?? 0}`}
+      </div>
+    </button>
   );
 }

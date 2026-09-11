@@ -1,6 +1,8 @@
 /** Обновление PWA / service worker без переустановки. */
 
 let refreshing = false;
+let registration = null;
+const updateListeners = new Set();
 
 function reloadOnce() {
   if (refreshing) return;
@@ -8,25 +10,40 @@ function reloadOnce() {
   window.location.reload();
 }
 
+function emitUpdateAvailable(available) {
+  for (const fn of updateListeners) {
+    try {
+      fn(available);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function wireRegistration(reg) {
+  registration = reg;
   navigator.serviceWorker.addEventListener("controllerchange", reloadOnce);
 
-  const askWaiting = () => {
-    if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+  const onWaiting = () => {
+    if (reg.waiting && navigator.serviceWorker.controller) {
+      emitUpdateAvailable(true);
+    }
   };
 
-  askWaiting();
+  onWaiting();
   reg.addEventListener("updatefound", () => {
     const sw = reg.installing;
     if (!sw) return;
     sw.addEventListener("statechange", () => {
-      if (sw.state === "installed" && navigator.serviceWorker.controller) {
-        askWaiting();
-      }
+      if (sw.state === "installed") onWaiting();
     });
   });
 
+  let lastPoke = 0;
   const poke = () => {
+    const now = Date.now();
+    if (now - lastPoke < 60_000) return; // ponytail: throttle focus-spam, updates need not be instant
+    lastPoke = now;
     reg.update?.().catch(() => {});
   };
 
@@ -34,10 +51,25 @@ function wireRegistration(reg) {
     if (document.visibilityState === "visible") poke();
   });
   window.addEventListener("focus", poke);
-
-  // Периодически на открытом приложении
-  setInterval(poke, 60_000);
   poke();
+}
+
+/** Подписка на появление waiting SW (есть обновление). */
+export function onAppUpdateAvailable(fn) {
+  updateListeners.add(fn);
+  if (registration?.waiting && navigator.serviceWorker.controller) fn(true);
+  return () => updateListeners.delete(fn);
+}
+
+/** Применить обновление: активировать новый SW и перезагрузить. */
+export async function applyAppUpdate() {
+  const reg = registration || (await navigator.serviceWorker.getRegistration());
+  if (reg?.waiting) {
+    reg.waiting.postMessage({ type: "SKIP_WAITING" });
+    setTimeout(reloadOnce, 900);
+    return;
+  }
+  await checkForAppUpdate();
 }
 
 export function registerServiceWorker() {
@@ -45,7 +77,13 @@ export function registerServiceWorker() {
   if (!import.meta.env.PROD) return;
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").then(wireRegistration).catch(() => {});
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      wireRegistration(reg);
+      // Первый визит — сразу активируем SW
+      if (reg.waiting && !navigator.serviceWorker.controller) {
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    }).catch(() => {});
   });
 }
 
@@ -73,12 +111,10 @@ export async function checkForAppUpdate() {
 
   if (reg.waiting) {
     reg.waiting.postMessage({ type: "SKIP_WAITING" });
-    // controllerchange сделает reload; запасной таймер
     setTimeout(reloadOnce, 800);
     return { updated: true, reloaded: false };
   }
 
-  // Нет нового SW — всё равно жёстко перезагружаем страницу
   const url = new URL(window.location.href);
   url.searchParams.set("_r", String(Date.now()));
   window.location.replace(url.toString());

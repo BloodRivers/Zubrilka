@@ -1,23 +1,34 @@
 import { BookOpen, Library, Settings2, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { auth } from "../firebase";
 import { TAB_ROOTS, tabOf, resumeTab } from "../nav";
 import Segmented from "./Segmented";
 
-const TAB_META = [
-  { label: "Предметы", icon: BookOpen },
+const FULL_TAB_META = [
+  { label: "Главная", icon: BookOpen },
   { label: "Библиотека", icon: Library },
   { label: "Настройки", icon: Settings2 },
   { label: "Аккаунт", icon: User },
 ];
 
-const options = TAB_ROOTS.map((v, i) => ({ v, ...TAB_META[i] }));
+const GUEST_TAB_META = [
+  { label: "Главная", icon: BookOpen },
+  { label: "Библиотека", icon: Library },
+  { label: "Гость", icon: User },
+];
+
+const GUEST_TAB_ROOTS = ["/", "/library", "/account"];
 
 export default function BottomNav({ confirmLeave }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const isGuest = !!auth.currentUser?.isAnonymous;
 
-  // Во время теста прячем табы — уход только через «назад» / свайп с confirm
-  if (/\/quiz(\/|$)/.test(location.pathname)) return null;
+  if (/\/quiz(\/|$)/.test(location.pathname) || /^\/trainer\//.test(location.pathname)) return null;
+
+  const roots = isGuest ? GUEST_TAB_ROOTS : TAB_ROOTS;
+  const meta = isGuest ? GUEST_TAB_META : FULL_TAB_META;
+  const options = roots.map((v, i) => ({ v, ...meta[i] }));
 
   return (
     <div style={{ padding: "8px 18px calc(8px + env(safe-area-inset-bottom)) 18px", flexShrink: 0 }}>

@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { signOut, deleteUser } from "firebase/auth";
-import { Download } from "lucide-react";
+import { Download, Camera } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import { Bone, useGhostHold } from "../components/Ghost";
 import Avatar from "../components/Avatar";
-import { getUserProfile, updateUserProfile, exportUserData, deleteAllUserData } from "../api/firestore";
+import { getUserProfile, updateUserProfile, exportUserData, deleteAllUserData, countPublishedContent } from "../api/firestore";
+import { downscaleImageFile } from "../api/files";
 
 const row = (t) => ({
   padding: "14px 16px",
@@ -47,13 +48,34 @@ function GhostAccountSimple() {
   );
 }
 
+function StatsCard({ t, label, value, hint }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        padding: "16px 18px",
+        borderRadius: 18,
+        background: t.surface,
+        border: `1px solid ${t.border}`,
+      }}
+    >
+      <div style={{ color: t.text, fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em" }}>{value}</div>
+      <div style={{ color: t.sub, fontSize: 13, marginTop: 2 }}>{hint}</div>
+      <div style={{ color: t.text, fontSize: 14, fontWeight: 600, marginTop: 4 }}>{label}</div>
+    </div>
+  );
+}
+
 export default function Account() {
   const { t } = useTheme();
   const { alert } = useAlert();
   const [name, setName] = useState("");
   const [profile, setProfile] = useState(null);
   const [ready, setReady] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const showGhost = useGhostHold(!ready);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -61,6 +83,8 @@ export default function Account() {
         const me = await getUserProfile().catch(() => null);
         setProfile(me || {});
         setName(me?.name || auth.currentUser?.displayName || "");
+        const st = await countPublishedContent().catch(() => null);
+        setStats(st);
       } catch {
         setProfile({});
       } finally {
@@ -82,6 +106,25 @@ export default function Account() {
     }, 3000);
     return () => clearTimeout(id);
   }, [name]);
+
+  const pickPhoto = () => fileRef.current?.click();
+
+  const onPhotoFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      const dataUrl = await downscaleImageFile(file, 128);
+      await updateUserProfile({ photo_url: dataUrl });
+      setProfile((p) => ({ ...p, photo_url: dataUrl }));
+    } catch (err) {
+      alert("Не удалось загрузить фото: " + (err?.message ?? ""));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const exportData = async () => {
     try {
@@ -140,7 +183,44 @@ export default function Account() {
     <div>
       <div style={sectionTitle(t, true)}>Данные</div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "2px 2px 12px" }}>
-        <Avatar name={displayName} src={auth.currentUser?.photoURL || profile?.photo_url} size={58} />
+        <button
+          type="button"
+          className="press"
+          onClick={photoBusy ? undefined : pickPhoto}
+          aria-label="Сменить фото профиля"
+          disabled={photoBusy}
+          style={{
+            position: "relative",
+            border: "none",
+            background: "none",
+            cursor: photoBusy ? "default" : "pointer",
+            padding: 0,
+            width: 58,
+            height: 58,
+            flexShrink: 0,
+            opacity: photoBusy ? 0.6 : 1,
+          }}
+        >
+          <Avatar name={displayName} src={auth.currentUser?.photoURL || profile?.photo_url} size={58} />
+          <span
+            style={{
+              position: "absolute",
+              right: -2,
+              bottom: -2,
+              width: 24,
+              height: 24,
+              borderRadius: 999,
+              background: t.invBg,
+              color: t.inv,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: `0 0 0 2px ${t.bg}`,
+            }}
+          >
+            <Camera size={13} />
+          </span>
+        </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: t.text, fontSize: 21, fontWeight: 700, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {displayName}
@@ -150,6 +230,7 @@ export default function Account() {
           </div>
         </div>
       </div>
+      <input ref={fileRef} type="file" accept="image/*" onChange={onPhotoFile} style={{ display: "none" }} />
       <div style={{ ...row(t), gap: 10 }}>
         <input
           value={name}
@@ -167,6 +248,12 @@ export default function Account() {
             fontFamily: "inherit",
           }}
         />
+      </div>
+
+      <div style={sectionTitle(t)}>Статистика</div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <StatsCard t={t} label="конспектов" value={stats?.notes ?? 0} hint="опубликовано" />
+        <StatsCard t={t} label="тестов" value={stats?.tests ?? 0} hint="опубликовано" />
       </div>
 
       <div style={sectionTitle(t)}>Данные</div>

@@ -44,8 +44,19 @@ input, textarea {
 .press { transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease; }
 .press:active { transform: scale(0.95); }
 
+@keyframes stream {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
 .rowpress { transition: opacity 160ms ease; }
 .rowpress:active { opacity: 0.5; }
+
+.swap { position: relative; animation: swapIn 300ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes swapIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .accordion {
   display: grid;

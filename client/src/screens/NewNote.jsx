@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Check } from "lucide-react";
+import { Plus, Check, FileText, FileType } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import Button from "../components/Button";
 import { createNote } from "../api/firestore";
-import { analyzeNote } from "../api/backend";
+import { ocrNotePhotos, structureNote } from "../api/backend";
+import { classifyAttachFile, extractPdfText, extractTextFile, downscaleImageFile } from "../api/files";
 import { onAIStatus, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 
 const WORK_PHRASES = [
@@ -19,41 +20,8 @@ const WORK_PHRASES = [
   "Свожу всё в конспект…",
 ];
 
-async function readFile(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
-async function compressImage(dataUrl, max = 1280) {
-  const img = await new Promise((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = () => rej(new Error("Не удалось декодировать фото (нужен JPG/PNG, не HEIC)"));
-    i.src = dataUrl;
-  });
-  if (!img.width || !img.height) {
-    throw new Error("Фото с нулевым размером — не загрузилось");
-  }
-  const scale = Math.min(1, max / Math.max(img.width, img.height));
-  const w = Math.max(1, Math.round(img.width * scale));
-  const h = Math.max(1, Math.round(img.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(img, 0, 0, w, h);
-  const out = canvas.toDataURL("image/jpeg", 0.8);
-  if (out.length < 5000) {
-    throw new Error("После сжатия фото почти пустое — попробуй другое");
-  }
-  return out;
-}
+const ACCEPT =
+  "image/*,application/pdf,text/plain,text/markdown,text/csv,.pdf,.txt,.md,.markdown,.csv,.log";
 
 const genericName = () => {
   const d = new Date();
@@ -65,16 +33,23 @@ const genericName = () => {
 
 const TITLE_OPTS = [
   { v: "ai", label: "От ИИ", sub: "Название, которое предложит модель" },
-  { v: "generic", label: "Автодата", sub: "Конспект от 05.09.26" },
+  { v: "generic", label: "Автодата", sub: `Конспект от ${genericName()}` },
   { v: "custom", label: "Своё", sub: "Напиши название вручную" },
 ];
+
+let attachSeq = 0;
+function nextAttachId() {
+  attachSeq += 1;
+  return `a${attachSeq}`;
+}
 
 export default function NewNote() {
   const { subjectId } = useParams();
   const navigate = useNavigate();
   const { t } = useTheme();
   const { alert } = useAlert();
-  const [photos, setPhotos] = useState([]);
+  /** @type {[{id:string,kind:"image"|"pdf"|"text",name:string,src?:string,text?:string}]} */
+  const [attachments, setAttachments] = useState([]);
   const [text, setText] = useState("");
   const [titleMode, setTitleMode] = useState("ai");
   const [customTitle, setCustomTitle] = useState("");
@@ -84,6 +59,10 @@ export default function NewNote() {
   const [status, setStatus] = useState(null);
   const statusTimer = useRef(null);
   const [phraseIdx, setPhraseIdx] = useState(0);
+
+  const photos = attachments.filter((a) => a.kind === "image");
+  const docs = attachments.filter((a) => a.kind !== "image");
+  const hasInput = attachments.length > 0 || text.trim() !== "";
 
   useEffect(() => {
     const off = onAIStatus((msg) => {
@@ -101,58 +80,100 @@ export default function NewNote() {
   }, [busy]);
 
   const addFiles = async (e) => {
-    const files = [...(e.target.files || [])].filter((f) => f.type.startsWith("image/"));
-    if (!files.length) {
-      e.target.value = "";
-      return;
-    }
-    try {
-      // сразу жмём до JPEG — в state лежит то, что реально уйдёт в ИИ
-      const urls = await Promise.all(
-        files.map(async (f) => compressImage(await readFile(f)))
-      );
-      setPhotos((p) => [...p, ...urls]);
-    } catch (err) {
-      console.error("[newnote] addFiles:", err);
-      alert(err?.message || "Не удалось прочитать фото");
-    }
+    const picked = [...(e.target.files || [])];
     e.target.value = "";
+    if (!picked.length) return;
+
+    const next = [];
+    const errors = [];
+
+    for (const file of picked) {
+      const kind = classifyAttachFile(file);
+      if (!kind) {
+        errors.push(`«${file.name}» — нужен фото, PDF или текст (.txt/.md)`);
+        continue;
+      }
+      try {
+        if (kind === "image") {
+          const src = await downscaleImageFile(file, 1280);
+          next.push({ id: nextAttachId(), kind: "image", name: file.name, src });
+        } else if (kind === "pdf") {
+          const extracted = await extractPdfText(file);
+          next.push({
+            id: nextAttachId(),
+            kind: "pdf",
+            name: file.name,
+            text: extracted,
+          });
+        } else {
+          const extracted = await extractTextFile(file);
+          next.push({
+            id: nextAttachId(),
+            kind: "text",
+            name: file.name,
+            text: extracted,
+          });
+        }
+      } catch (err) {
+        console.error("[newnote] file:", file.name, err);
+        errors.push(err?.message || `Не удалось прочитать «${file.name}»`);
+      }
+    }
+
+    if (next.length) setAttachments((prev) => [...prev, ...next]);
+    if (errors.length) {
+      alert(errors.join("\n"), { title: next.length ? "Часть файлов не добавлена" : "Не удалось" });
+    }
   };
+
+  const removeAttach = (id) => setAttachments((prev) => prev.filter((a) => a.id !== id));
 
   const submit = async () => {
     if (busy || submitting.current) return;
-    if (photos.length === 0 && text.trim() === "") {
-      alert("Добавь фото или вставь текст конспекта.");
+    if (!hasInput) {
+      alert("Добавь фото, PDF, текстовый файл или вставь текст.");
       return;
     }
     submitting.current = true;
     setBusy(true);
     try {
-      let parsed = { title: "", text: "", retelling: "", topics: [], plan: [] };
-      if (photos.length) {
-        // уже JPEG после addFiles; повторный compress на всякий случай
-        const comp = await Promise.all(photos.map((p) => compressImage(p)));
-        parsed = await analyzeNote(comp);
-        if (!parsed.text?.trim()) {
-          const e = new Error("Не удалось распознать текст на фото — попробуй ещё раз или вставь текст вручную");
-          e.isParse = true;
-          throw e;
+      const chunks = [];
+      const imageSrcs = photos.map((p) => p.src).filter(Boolean);
+      if (imageSrcs.length) {
+        const ocr = await ocrNotePhotos(imageSrcs);
+        if (ocr?.trim()) chunks.push(ocr.trim());
+      }
+      for (const doc of docs) {
+        if (doc.text?.trim()) {
+          chunks.push(`--- ${doc.name} ---\n${doc.text.trim()}`);
         }
       }
-      const body = (parsed.text ? parsed.text : "") + (text ? (parsed.text ? "\n\n" : "") + text : "");
-      if (!body.trim()) {
-        alert("Добавь фото или вставь текст конспекта.");
+      if (text.trim()) chunks.push(text.trim());
+
+      const transcript = chunks.join("\n\n");
+      if (!transcript.trim()) {
+        alert("Не удалось получить текст из вложений.");
         return;
       }
+
+      const parsed = await structureNote(transcript, {
+        keepSourceText: docs.length > 0 || transcript.length > 10000,
+      });
+      if (!parsed.text?.trim()) {
+        const e = new Error("Не удалось разобрать конспект — попробуй ещё раз или поправь текст");
+        e.isParse = true;
+        throw e;
+      }
+
       const fallback = genericName();
       let title = fallback;
       if (titleMode === "ai") title = parsed.title || fallback;
       if (titleMode === "custom") title = customTitle.trim() || fallback;
+
       await createNote({
         subject_id: subjectId,
         title,
-        text: body,
-        topics: parsed.topics,
+        text: parsed.text,
         plan: parsed.plan,
         retelling: parsed.retelling,
       });
@@ -231,9 +252,44 @@ export default function NewNote() {
     );
   };
 
+  const removeBtn = (id, label) => (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={() => removeAttach(id)}
+      style={{
+        position: "absolute",
+        top: -5,
+        right: -5,
+        width: 20,
+        height: 20,
+        borderRadius: 999,
+        border: "none",
+        background: t.invBg,
+        color: t.inv,
+        fontSize: 12,
+        lineHeight: 1,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 0,
+      }}
+    >
+      ×
+    </button>
+  );
+
   return (
     <div>
-      <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={addFiles} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept={ACCEPT}
+        multiple
+        style={{ display: "none" }}
+        onChange={addFiles}
+      />
 
       <div style={{ marginBottom: 22 }}>
         <div style={{ color: t.sub, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 4px 10px" }}>
@@ -263,7 +319,9 @@ export default function NewNote() {
         )}
       </div>
 
-      <div style={{ color: t.sub, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 4px 10px" }}>Фото</div>
+      <div style={{ color: t.sub, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 4px 10px" }}>
+        Файлы
+      </div>
       <button
         type="button"
         className="press"
@@ -285,48 +343,68 @@ export default function NewNote() {
           gap: 8,
         }}
       >
-        <Plus size={16} /> Добавить фото
+        <Plus size={16} /> Добавить файлы
       </button>
       <div style={{ color: t.sub, fontSize: 12, margin: "6px 4px 0", lineHeight: 1.4 }}>
-        Можно несколько — фотографируй страницу ровно, без бликов.
+        Фото, PDF или текст (.txt, .md). PDF — с текстовым слоем (не скан).
       </div>
 
       {photos.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-          {photos.map((src, i) => (
-            <div key={i} style={{ position: "relative" }}>
+          {photos.map((a) => (
+            <div key={a.id} style={{ position: "relative" }}>
               <img
-                src={src}
-                alt="Фото конспекта"
+                src={a.src}
+                alt={a.name || "Фото конспекта"}
                 style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 12, border: `1px solid ${t.border}` }}
               />
-              <button
-                type="button"
-                aria-label="Убрать фото"
-                onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))}
-                style={{
-                  position: "absolute",
-                  top: -5,
-                  right: -5,
-                  width: 20,
-                  height: 20,
-                  borderRadius: 999,
-                  border: "none",
-                  background: t.invBg,
-                  color: t.inv,
-                  fontSize: 12,
-                  lineHeight: 1,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 0,
-                }}
-              >
-                ×
-              </button>
+              {removeBtn(a.id, "Убрать фото")}
             </div>
           ))}
+        </div>
+      )}
+
+      {docs.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+          {docs.map((a) => {
+            const Icon = a.kind === "pdf" ? FileType : FileText;
+            const chars = a.text?.length || 0;
+            return (
+              <div
+                key={a.id}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 14px",
+                  borderRadius: 14,
+                  border: `1px solid ${t.border}`,
+                  background: t.raised,
+                }}
+              >
+                <Icon size={18} color={t.sub} style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      color: t.text,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {a.name}
+                  </div>
+                  <div style={{ color: t.sub, fontSize: 12, marginTop: 2 }}>
+                    {a.kind === "pdf" ? "PDF" : "Текст"} · ~{chars.toLocaleString("ru-RU")} симв.
+                  </div>
+                </div>
+                {removeBtn(a.id, "Убрать файл")}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -351,11 +429,11 @@ export default function NewNote() {
         }}
       />
 
-      <Button variant="primary" onClick={submit} disabled={busy || (photos.length === 0 && text.trim() === "")} style={{ marginTop: 18 }}>
+      <Button variant="primary" onClick={submit} disabled={busy || !hasInput} style={{ marginTop: 18 }}>
         {busy ? "Анализирую…" : "Анализировать"}
       </Button>
       <div style={{ color: t.sub, fontSize: 12, margin: "8px 6px 0", lineHeight: 1.4, textAlign: "center" }}>
-        Анализ — это 1 запрос к ИИ. Сегодня: {aiUsedToday()}/{AI_DAILY_LIMIT}.
+        Анализ — запросы к ИИ. Сегодня: {aiUsedToday()}/{AI_DAILY_LIMIT}.
       </div>
 
       {busy &&

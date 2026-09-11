@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { ChevronRight } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 
-export default function ListRow({ icon, title, sub, onClick, onLongPress, right, idx = 0, borderless }) {
+export default function ListRow({ icon, title, sub, onClick, onLongPress, right, idx = 0, borderless, iconWrap }) {
   const { t } = useTheme();
   const timer = useRef(null);
   const fired = useRef(false);
@@ -66,7 +66,7 @@ export default function ListRow({ icon, title, sub, onClick, onLongPress, right,
             width: 44,
             height: 44,
             borderRadius: 14,
-            background: t.raised,
+            background: iconWrap?.background || t.raised,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

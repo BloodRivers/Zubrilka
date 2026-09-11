@@ -17,6 +17,12 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.uid == userId;
     }
 
+    // Публичный маркер релиза (версия для баннера в приложении)
+    match /app/{docId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     match /subjects/{id} {
       allow read: if signedIn() && resource.data.owner_id == request.auth.uid;
       allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
@@ -24,13 +30,13 @@ service cloud.firestore {
     }
 
     match /notes/{id} {
-      allow read: if signedIn() && (isOwner(resource.data) || isPublic(resource.data));
+      allow read: if (!signedIn() && isPublic(resource.data)) || (signedIn() && (isOwner(resource.data) || isPublic(resource.data)));
       allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
       allow update, delete: if isOwner(resource.data);
     }
 
     match /tests/{id} {
-      allow read: if signedIn() && (isOwner(resource.data) || isPublic(resource.data));
+      allow read: if (!signedIn() && isPublic(resource.data)) || (signedIn() && (isOwner(resource.data) || isPublic(resource.data)));
       allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
       allow update, delete: if isOwner(resource.data);
     }

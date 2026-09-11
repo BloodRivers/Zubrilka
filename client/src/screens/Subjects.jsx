@@ -17,12 +17,15 @@ import {
   HeartPulse,
   MapPin,
   X,
+  Sparkles,
 } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import ListRow from "../components/ListRow";
 import Button from "../components/Button";
+import Accordion from "../components/Accordion";
 import { GhostList, useGhostHold } from "../components/Ghost";
+import { auth } from "../firebase";
 import { listSubjects, createSubject, updateSubject, deleteSubject, countNotes } from "../api/firestore";
 
 const ICONS = {
@@ -30,25 +33,71 @@ const ICONS = {
 };
 const ICON_KEYS = Object.keys(ICONS);
 
-const ICON_LABELS = {
-  Book: "Книга",
-  FlaskConical: "Пробирка",
-  Calculator: "Калькулятор",
-  Languages: "Языки",
-  Globe: "Глобус",
-  Atom: "Атом",
-  Landmark: "Здание",
-  Palette: "Палитра",
-  Music2: "Музыка",
-  Dumbbell: "Спорт",
-  TrendingUp: "График",
-  HeartPulse: "Пульс",
-  MapPin: "Пин",
-};
+const SUBJECT_COLORS = [
+  null,
+  "#E5484D",
+  "#F76B15",
+  "#F5A623",
+  "#46A758",
+  "#0091FF",
+  "#8E4EC6",
+  "#E93D82",
+];
+
+const PREMADE_SUBJECTS = [
+  "Математика", "Алгебра", "Геометрия", "Русский язык",
+  "Литература", "История", "Обществознание", "Английский язык",
+  "Немецкий язык", "Физика", "Химия", "Биология",
+  "География", "Информатика", "ОБЖ",
+];
+
+const CHANGELOG = [
+  {
+    version: "2.1",
+    date: "сентябрь 2026",
+    items: [
+      "Количество вопросов теста — выбирай перед стартом (Экспресс / Стандарт / Максимум)",
+      "Правильный ответ подсвечивается зелёным, при ошибке тест ждёт кнопки «Дальше»",
+      "Письменный ответ: читаешь конспект и отмечаешь это перед проверкой",
+      "Тесты, результаты и публичные копии каскадно удаляются вместе с конспектом или предметом",
+      "Вычитка распознанного текста — второй проход по фото убирает ошибки OCR",
+      "Название и цвет предмета выбираются колёсиками, «Другое…» для своего названия",
+      "Темы убраны: план и пересказ внутри конспекта",
+      "Библиотека показывает все типы заданий на карточке теста",
+      "Обновлённые документы",
+    ],
+  },
+  {
+    version: "2.0",
+    date: "сентябрь 2026",
+    items: [
+      "Цвета для предметов — выбирай из палитры",
+      "Готовые названия предметов + «Другое»",
+      "Библиотека: фильтры по типу и предмету",
+      "Статистика публикаций в профиле",
+      "Карточки авторов в библиотеке и профили пользователей",
+      "Интерактивный план с пересказом по разделам",
+      "Тесты прямо из конспекта",
+      "Переименование тестов",
+      "Гостевой режим без регистрации",
+      "Формулы в конспектах (KaTeX)",
+      "Смена фото профиля",
+      "Обновлённые документы",
+    ],
+  },
+];
+
+function hexToRgba(hex, alpha) {
+  const h = String(hex || "").replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  const n = parseInt(h, 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
 
 const ITEM = 60;
+const NAME_WIDTH = 190;
+const NAME_HEIGHT = 46;
 const GAP = 12;
-const STEP = ITEM + GAP;
 
 const SIDE_FADE =
   "linear-gradient(to right, transparent 0%, #000 22%, #000 78%, transparent 100%)";
@@ -57,73 +106,69 @@ function mod(a, n) {
   return ((a % n) + n) % n;
 }
 
-function IconWheel({ value, onSelect }) {
-  const { t } = useTheme();
+function PickerWheel({ value, onSelect, items, getValue = (x) => x, renderItem, itemWidth = ITEM, itemHeight = ITEM }) {
   const wheelRef = useRef(null);
-  const keys = ICON_KEYS;
-  const len = keys.length;
+  const len = items.length;
   const [pos, setPos] = useState(0);
   const posRef = useRef(0);
   const [snapping, setSnapping] = useState(false);
   const drag = useRef(null);
   const raf = useRef(0);
   const lastSel = useRef(-1);
+  const step = itemWidth + GAP;
+  const activeIdx = items.findIndex((x) => getValue(x) === value);
 
   const applyPos = (v) => {
     posRef.current = v;
     setPos(v);
   };
 
-  const nearestFold = (icon, from) =>
-    icon - Math.round((icon - from) / len) * len;
+  const nearestFold = (idx, from) => idx - Math.round((idx - from) / len) * len;
 
   const settle = (m) => {
     if (m !== lastSel.current) {
       lastSel.current = m;
-      onSelect(keys[m]);
+      onSelect(items[m]);
     }
     applyPos(nearestFold(m, posRef.current));
     setSnapping(true);
   };
 
   const fling = (iv) => {
-    let vel = Math.max(-10 / STEP, Math.min(10 / STEP, iv));
+    let vel = Math.max(-10 / step, Math.min(10 / step, iv));
     let lastT = performance.now();
-    const step = () => {
+    const tick = () => {
       const now = performance.now();
       const dt = Math.min(now - lastT, 34);
       lastT = now;
       applyPos(posRef.current + vel * dt);
       vel *= Math.pow(0.95, dt / 16.667);
-      if (Math.abs(vel) * STEP >= 0.12) {
-        raf.current = requestAnimationFrame(step);
+      if (Math.abs(vel) * step >= 0.12) {
+        raf.current = requestAnimationFrame(tick);
       } else {
         settle(mod(Math.round(posRef.current), len));
       }
     };
-    raf.current = requestAnimationFrame(step);
+    raf.current = requestAnimationFrame(tick);
   };
 
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   useLayoutEffect(() => {
-    const i = Math.max(0, keys.findIndex((x) => x === value));
-    lastSel.current = i;
-    if (mod(Math.round(posRef.current), len) !== i) {
-      applyPos(nearestFold(i, posRef.current));
+    if (activeIdx < 0) return;
+    lastSel.current = activeIdx;
+    if (mod(Math.round(posRef.current), len) !== activeIdx) {
+      applyPos(nearestFold(activeIdx, posRef.current));
     }
-  }, [value]);
+  }, [activeIdx]);
 
   const cw = wheelRef.current?.clientWidth || 280;
-  const activeMod = mod(Math.round(pos), len);
   const start = Math.floor(pos) - 3;
 
-  const items = [];
+  const rendered = [];
   for (let k = 0; k < len + 7; k++) {
     const v = start + k;
-    const m = mod(v, len);
-    const C = ICONS[keys[m]];
-    if (C) items.push({ v, m, key: keys[m], C });
+    rendered.push({ v, m: mod(v, len), item: items[mod(v, len)] });
   }
 
   const onPointerDown = (e) => {
@@ -140,7 +185,7 @@ function IconWheel({ value, onSelect }) {
   const onPointerMove = (e) => {
     if (!drag.current) return;
     const d = drag.current;
-    applyPos(d.startPos - (e.clientX - d.startX) / STEP);
+    applyPos(d.startPos - (e.clientX - d.startX) / step);
     const now = performance.now();
     d.samples.push({ t: now, x: e.clientX });
     while (d.samples.length > 2 && d.samples[0].t < now - 120) d.samples.shift();
@@ -153,9 +198,7 @@ function IconWheel({ value, onSelect }) {
     if (Math.abs(e.clientX - d.startX) < 6) {
       const rect = wheelRef.current.getBoundingClientRect();
       const cwL = wheelRef.current.clientWidth;
-      const v = Math.round(
-        posRef.current + (e.clientX - rect.left - cwL / 2) / STEP
-      );
+      const v = Math.round(posRef.current + (e.clientX - rect.left - cwL / 2) / step);
       settle(mod(v, len));
       return;
     }
@@ -165,7 +208,7 @@ function IconWheel({ value, onSelect }) {
         ? (s[s.length - 1].x - s[0].x) / (s[s.length - 1].t - s[0].t)
         : 0;
     if (Math.abs(vel) >= 0.4 && Math.abs(e.clientX - d.startX) >= 30)
-      fling(-vel / STEP);
+      fling(-vel / step);
     else settle(mod(Math.round(posRef.current), len));
   };
 
@@ -179,7 +222,7 @@ function IconWheel({ value, onSelect }) {
       onPointerCancel={onPointerUp}
       style={{
         position: "relative",
-        height: ITEM + 28,
+        height: itemHeight + 28,
         overflow: "hidden",
         touchAction: "pan-y",
         cursor: "grab",
@@ -187,36 +230,32 @@ function IconWheel({ value, onSelect }) {
         maskImage: SIDE_FADE,
       }}
     >
-      {items.map(({ v, m, key, C }) => {
-        const isActive = m === activeMod;
+      {rendered.map(({ v, m, item }, i) => {
+        const isActive = m === activeIdx;
         return (
-          <button
-            key={`${v}-${key}`}
-            type="button"
-            aria-label={key}
+          <div
+            key={`${v}-${i}`}
             style={{
               position: "absolute",
-              left: cw / 2 - ITEM / 2 + (v - pos) * STEP,
+              left: cw / 2 - itemWidth / 2 + (v - pos) * step,
               top: 14,
-              width: ITEM,
-              height: ITEM,
+              width: itemWidth,
+              height: itemHeight,
               borderRadius: 18,
-              border: "none",
-              background: isActive ? t.invBg : t.raised,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: "grab",
               touchAction: "pan-y",
               userSelect: "none",
-              transform: isActive ? "scale(1.15)" : "scale(0.85)",
+              transform: isActive ? "scale(1.05)" : "scale(0.92)",
               transition: snapping
-                ? "left 240ms cubic-bezier(0.16,1,0.3,1), transform 220ms cubic-bezier(0.16,1,0.3,1), background 220ms ease"
-                : "transform 220ms cubic-bezier(0.16,1,0.3,1), background 220ms ease",
+                ? "left 240ms cubic-bezier(0.16,1,0.3,1), transform 220ms cubic-bezier(0.16,1,0.3,1)"
+                : "transform 220ms cubic-bezier(0.16,1,0.3,1)",
             }}
           >
-            <C size={26} color={isActive ? t.inv : t.text} strokeWidth={2} />
-          </button>
+            {renderItem(item, isActive)}
+          </div>
         );
       })}
     </div>
@@ -236,14 +275,18 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
   const { t } = useTheme();
   const { alert } = useAlert();
   const [name, setName] = useState("");
+  const [custom, setCustom] = useState(false);
   const [icon, setIcon] = useState("Book");
+  const [color, setColor] = useState(null);
   const [leaving, setLeaving] = useState(false);
   const timer = useRef(null);
 
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "");
+      setCustom(Boolean(initial) && !PREMADE_SUBJECTS.includes(initial.name));
       setIcon(initial?.icon ?? "Book");
+      setColor(initial?.color ?? null);
       setLeaving(false);
     }
   }, [open, initial]);
@@ -276,7 +319,7 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
     }
     setLeaving(true);
     try {
-      await onSave(initial, name.trim(), icon);
+      await onSave(initial, name.trim(), icon, color);
     } catch (err) {
       alert("Не удалось сохранить предмет: " + (err?.message ?? ""));
     } finally {
@@ -365,30 +408,136 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
           <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px 2px" }}>
             Название
           </div>
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Например «Математика»"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "14px 16px",
-              borderRadius: 14,
-              border: `1px solid ${t.border}`,
-              background: t.raised,
-              color: t.text,
-              fontSize: 15,
-              fontFamily: "inherit",
-              outline: "none",
-              marginBottom: 16,
-            }}
-          />
+          {!custom ? (
+            <>
+              <PickerWheel
+                value={name}
+                items={PREMADE_SUBJECTS}
+                onSelect={(s) => setName(s)}
+                itemWidth={NAME_WIDTH}
+                itemHeight={NAME_HEIGHT}
+                renderItem={(s, isActive) => (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: 999,
+                      border: "none",
+                      background: isActive ? t.invBg : t.raised,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0 14px",
+                      boxSizing: "border-box",
+                      overflow: "hidden",
+                      color: isActive ? t.inv : t.text,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {s}
+                  </div>
+                )}
+              />
+              <button
+                type="button"
+                className="press"
+                onClick={() => setCustom(true)}
+                style={{
+                  margin: "10px auto 16px",
+                  display: "block",
+                  padding: "9px 16px",
+                  borderRadius: 999,
+                  border: `1px solid ${t.border}`,
+                  background: t.raised,
+                  color: t.sub,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                Другое…
+              </button>
+            </>
+          ) : (
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Своё название"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "14px 16px",
+                borderRadius: 14,
+                border: `1px solid ${t.border}`,
+                background: t.raised,
+                color: t.text,
+                fontSize: 15,
+                fontFamily: "inherit",
+                outline: "none",
+                marginBottom: 16,
+              }}
+            />
+          )}
 
           <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px 2px" }}>
+            Цвет
+          </div>
+          <PickerWheel
+            value={color}
+            items={SUBJECT_COLORS}
+            onSelect={(c) => setColor(c)}
+            renderItem={(c, isActive) => (
+              <div
+                aria-label={c ? "Цвет" : "Без цвета"}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 999,
+                  boxSizing: "border-box",
+                  border: isActive ? `2px solid ${t.text}` : `1px solid ${c ? "transparent" : t.border}`,
+                  background: c || t.raised,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {!c && <X size={15} color={t.sub} />}
+              </div>
+            )}
+          />
+
+          <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", margin: "18px 0 8px 2px" }}>
             Иконка
           </div>
-          <IconWheel value={icon} onSelect={setIcon} />
+          <PickerWheel
+            value={icon}
+            items={ICON_KEYS}
+            onSelect={(k) => setIcon(k)}
+            renderItem={(k, isActive) => {
+              const C = ICONS[k];
+              return C ? (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: 18,
+                    border: "none",
+                    background: isActive ? t.invBg : t.raised,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <C size={26} color={isActive ? t.inv : t.text} strokeWidth={2} />
+                </div>
+              ) : null;
+            }}
+          />
 
           <Button
             type="submit"
@@ -425,6 +574,64 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
       </div>
     </div>,
     document.body
+  );
+}
+
+function Changelog({ t }) {
+  const [open, setOpen] = useState(null);
+  return (
+    <div style={{ marginTop: 34, paddingBottom: 8 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          color: t.sub,
+          fontSize: 13,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          margin: "0 0 10px 4px",
+        }}
+      >
+        <Sparkles size={15} /> Что нового
+      </div>
+      {CHANGELOG.map((rel, i) => (
+        <Accordion
+          key={rel.version}
+          title={`Версия ${rel.version} · ${rel.date}`}
+          open={open === i}
+          onToggle={() => setOpen(open === i ? null : i)}
+        >
+          {(rel.items || []).map((item, j) => (
+            <div key={j} style={{ color: t.sub, fontSize: 14, padding: "5px 0", paddingLeft: 4, lineHeight: 1.45 }}>
+              — {item}
+            </div>
+          ))}
+        </Accordion>
+      ))}
+    </div>
+  );
+}
+
+function GuestBanner({ t }) {
+  return (
+    <div
+      style={{
+        padding: "16px 18px",
+        borderRadius: 18,
+        border: `1px solid ${t.border}`,
+        background: t.surface,
+        marginBottom: 16,
+      }}
+    >
+      <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>
+        Ты в гостевом режиме
+      </div>
+      <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.5, marginTop: 4 }}>
+        Можно смотреть библиотеку и проходить тесты. Создание конспектов доступно после регистрации.
+      </div>
+    </div>
   );
 }
 
@@ -473,11 +680,11 @@ export default function Subjects() {
     load();
   }, []);
 
-  const onSave = async (initial, name, icon) => {
+  const onSave = async (initial, name, icon, color) => {
     setAdding(true);
     try {
-      if (initial) await updateSubject(initial.id, { name, icon });
-      else await createSubject(name, icon);
+      if (initial) await updateSubject(initial.id, { name, icon, color });
+      else await createSubject(name, icon, color);
       await load();
       setShowModal(false);
     } catch {
@@ -503,6 +710,7 @@ export default function Subjects() {
 
   return (
     <div>
+      {auth.currentUser?.isAnonymous && <GuestBanner t={t} />}
       {showGhost ? (
         <GhostList count={5} />
       ) : error ? (
@@ -512,15 +720,18 @@ export default function Subjects() {
       ) : (
         subjects.map((s, idx) => {
           const C = ICONS[s.icon] || ICONS.Book;
+          const iconColor = s.color || t.text;
+          const tint = hexToRgba(s.color, 0.16);
           return (
             <ListRow
               key={s.id}
               idx={idx}
-              icon={<C size={20} color={t.text} strokeWidth={2} />}
+              icon={<C size={20} color={iconColor} strokeWidth={2} />}
               title={s.name}
               sub={`${s.count} ${plural(s.count)}`}
               onClick={() => navigate(`/subject/${s.id}`)}
               onLongPress={() => openEdit(s)}
+              iconWrap={tint ? { background: tint } : undefined}
             />
           );
         })
@@ -532,13 +743,17 @@ export default function Subjects() {
 
       {!showGhost && (
         <div style={{ marginTop: 24 }}>
-          <Button variant="dashed" onClick={openCreate} disabled={adding}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <Plus size={16} /> Новый предмет
-            </span>
-          </Button>
+          {!auth.currentUser?.isAnonymous && (
+            <Button variant="dashed" onClick={openCreate} disabled={adding}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <Plus size={16} /> Новый предмет
+              </span>
+            </Button>
+          )}
         </div>
       )}
+
+      {!showGhost && <Changelog t={t} />}
 
       <SubjectModal
         open={showModal}

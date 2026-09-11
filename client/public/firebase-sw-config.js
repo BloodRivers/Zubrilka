@@ -1,0 +1,1 @@
+self.__FIREBASE_CONFIG__={"apiKey":"AIzaSyCxYkOj1K5GEwy0wTx9ZC1cdGpxS04ZyL8","authDomain":"zubrilka-b2c47.firebaseapp.com","projectId":"zubrilka-b2c47","storageBucket":"zubrilka-b2c47.firebasestorage.app","messagingSenderId":"122423721968","appId":"1:122423721968:web:aeaaad727e099de4b42735"};

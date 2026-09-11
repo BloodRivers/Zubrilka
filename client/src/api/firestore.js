@@ -43,12 +43,28 @@ export async function getUserProfile() {
   return snap.exists() ? snap.data() : null;
 }
 
-export async function updateUserProfile({ name, photo_url, polza_key }) {
+export async function updateUserProfile({ name, photo_url, polza_key, fcm_token, push_enabled }) {
   const patch = {};
   if (name !== undefined) patch.name = name;
   if (photo_url !== undefined) patch.photo_url = photo_url;
   if (polza_key !== undefined) patch.polza_key = polza_key || "";
+  if (fcm_token !== undefined) patch.fcm_token = fcm_token || null;
+  if (push_enabled !== undefined) patch.push_enabled = Boolean(push_enabled);
   return setDoc(doc(db, "users", uid()), patch, { merge: true });
+}
+
+/** Сохранить FCM-токен текущего пользователя. */
+export async function saveFcmToken(token) {
+  if (!token) return;
+  return setDoc(
+    doc(db, "users", uid()),
+    {
+      fcm_token: token,
+      push_enabled: true,
+      fcm_updated_at: serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 /** Текущий дневной счётчик ИИ-запросов пользователя. */
@@ -91,49 +107,58 @@ const meta = () => ({
 const at = (c) =>
   query(collection(db, c), where(c === "test_results" ? "user_id" : "owner_id", "==", uid()));
 
+async function ownResultsRefsForTests(testIds) {
+  if (!testIds.length) return [];
+  const ids = new Set(testIds);
+  const snap = await getDocs(query(collection(db, "test_results"), where("user_id", "==", uid())));
+  return snap.docs.filter((d) => ids.has(d.data().test_id)).map((d) => d.ref);
+}
+
+async function batchDelete(refs) {
+  for (let i = 0; i < refs.length; i += 450) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 450).forEach((r) => batch.delete(r));
+    await batch.commit();
+  }
+}
+
 export async function listSubjects() {
   const q = query(collection(db, "subjects"), where("owner_id", "==", uid()));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-export async function createSubject(name, icon) {
-  return addDoc(collection(db, "subjects"), { name, icon: icon || "Book", ...meta() });
+export async function createSubject(name, icon, color) {
+  return addDoc(collection(db, "subjects"), { name, icon: icon || "Book", color: color || null, ...meta() });
 }
 
-export async function updateSubject(id, { name, icon }) {
-  return setDoc(doc(db, "subjects", id), { name, icon }, { merge: true });
+export async function updateSubject(id, { name, icon, color }) {
+  const patch = {};
+  if (name !== undefined) patch.name = name;
+  if (icon !== undefined) patch.icon = icon;
+  if (color !== undefined) patch.color = color;
+  return setDoc(doc(db, "subjects", id), patch, { merge: true });
 }
 
 export async function deleteSubject(id) {
   const subjNotes = await listNotes(id);
-  const noteIds = subjNotes.map((n) => n.id);
+  const noteSet = new Set(subjNotes.map((n) => n.id));
 
-  const tests = [];
-  if (noteIds.length) {
-    const ts = query(collection(db, "tests"), where("owner_id", "==", uid()));
-    const snap = await getDocs(ts);
-    tests.push(
-      ...snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((t) => (t.note_ids || []).some((nid) => noteIds.includes(nid)))
-    );
-  }
+  const ts = await getDocs(query(collection(db, "tests"), where("owner_id", "==", uid())));
+  const tests = ts.docs.filter((d) => {
+    const t = d.data();
+    // ponytail: A test spanning notes in two subjects dies with either subject — acceptable.
+    return t.subject_id === id || (t.note_ids || []).some((nid) => noteSet.has(nid));
+  });
 
-  const results = [];
-  if (tests.length || noteIds.length) {
-    const rs = query(collection(db, "test_results"), where("user_id", "==", uid()));
-    const snap = await getDocs(rs);
-    const deadTests = new Set([...tests.map((t) => t.id), ...noteIds]);
-    results.push(...snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((r) => deadTests.has(r.test_id)));
-  }
+  const resultRefs = await ownResultsRefsForTests(tests.map((d) => d.id));
 
   const batch = writeBatch(db);
   batch.delete(doc(db, "subjects", id));
   subjNotes.forEach((n) => batch.delete(doc(db, "notes", n.id)));
-  tests.forEach((t) => batch.delete(doc(db, "tests", t.id)));
-  results.forEach((r) => batch.delete(doc(db, "test_results", r.id)));
-  return batch.commit();
+  tests.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  await batchDelete(resultRefs);
 }
 
 export async function getSubject(id) {
@@ -166,7 +191,28 @@ export async function getNote(id) {
   return snap.exists() ? { id, ...snap.data() } : null;
 }
 
-export async function createNote({ subject_id, title, text, topics, plan, retelling, image_ref }) {
+export async function createNote({ subject_id, title, text, plan, retelling, image_ref }) {
+  if (!subject_id) throw new Error("Не указан предмет");
+  if (!title?.trim()) throw new Error("Не указано название конспекта");
+  if (!text?.trim()) throw new Error("Нет текста конспекта");
+
+  title = title.trim();
+  text = text.trim();
+
+  if (!Array.isArray(plan) || !plan.length) {
+    const sections = text.split(/\n{2,}/).filter((s) => s.trim());
+    plan = sections.slice(0, 5).map((s) => ({
+      title: s.split("\n")[0].replace(/^[\s\d.▪•-]+/, "").trim().slice(0, 100) || "Раздел",
+      summary: "",
+      items: [],
+    }));
+  }
+
+  if (!retelling?.trim()) {
+    const paragraphs = text.split(/\n{2,}/).filter((s) => s.trim().length > 20);
+    retelling = paragraphs[0]?.trim().slice(0, 500) || "";
+  }
+
   try {
     return await addDoc(collection(db, "notes"), {
       subject_id,
@@ -174,7 +220,6 @@ export async function createNote({ subject_id, title, text, topics, plan, retell
       shared_with: [],
       title,
       text,
-      topics,
       plan,
       retelling: retelling || "",
       image_ref: image_ref || null,
@@ -182,6 +227,9 @@ export async function createNote({ subject_id, title, text, topics, plan, retell
       public: false,
       published_at: null,
       author_name: "",
+      author_uid: "",
+      author_photo_url: "",
+      subject_name: "",
       created_at: serverTimestamp(),
     });
   } catch (err) {
@@ -201,7 +249,6 @@ export async function copyNoteToSubject(note, subjectId) {
     subject_id: subjectId,
     title: note.title || "Конспект",
     text: note.text || "",
-    topics: note.topics || [],
     plan: note.plan || [],
     retelling: note.retelling || "",
     image_ref: note.image_ref || null,
@@ -216,31 +263,40 @@ export async function updateNote(id, { title, pinned }) {
   return setDoc(doc(db, "notes", id), patch, { merge: true });
 }
 
-export async function setNotePublic(id, isPublic) {
+export async function setNotePublic(id, isPublic, subjectName) {
   const profile = await getUserProfile().catch(() => null);
   const photo = profile?.photo_url || auth.currentUser?.photoURL || "";
-  return setDoc(
-    doc(db, "notes", id),
-    {
-      public: Boolean(isPublic),
-      published_at: isPublic ? serverTimestamp() : null,
-      author_name: isPublic ? profile?.name || "" : "",
-      author_photo_url: isPublic ? photo : "",
-    },
-    { merge: true }
-  );
+  const patch = {
+    public: Boolean(isPublic),
+    published_at: isPublic ? serverTimestamp() : null,
+    author_name: isPublic ? profile?.name || "" : "",
+    author_uid: isPublic ? uid() : "",
+    author_photo_url: isPublic ? photo : "",
+  };
+  if (subjectName !== undefined) patch.subject_name = isPublic ? subjectName : "";
+  return setDoc(doc(db, "notes", id), patch, { merge: true });
 }
 
 export async function deleteNote(id) {
-  return deleteDoc(doc(db, "notes", id));
+  const ts = await getDocs(query(collection(db, "tests"), where("owner_id", "==", uid())));
+  const tests = ts.docs.filter((d) => (d.data().note_ids || []).includes(id));
+  const resultRefs = await ownResultsRefsForTests(tests.map((d) => d.id));
+
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "notes", id));
+  tests.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  await batchDelete(resultRefs);
 }
 
-export async function saveTest({ note_ids, type, questions, modes, quizlet, match, written, subject_id, title }) {
+export async function saveTest({ note_ids, type, questions, modes, quizlet, match, written, subject_id, title, size }) {
   return addDoc(collection(db, "tests"), {
     note_ids: note_ids || [],
     owner_id: uid(),
     type: type || "mixed",
+    mode: "mixed",
     modes: modes || ["single"],
+    size: size || null,
     questions: questions || [],
     quizlet: quizlet || [],
     match: match || [],
@@ -250,33 +306,37 @@ export async function saveTest({ note_ids, type, questions, modes, quizlet, matc
     public: false,
     published_at: null,
     author_name: "",
+    author_uid: "",
+    author_photo_url: "",
+    subject_name: "",
     created_at: serverTimestamp(),
   });
 }
 
-export async function setTestPublic(id, isPublic) {
+export async function setTestPublic(id, isPublic, subjectName) {
   const profile = await getUserProfile().catch(() => null);
   const photo = profile?.photo_url || auth.currentUser?.photoURL || "";
-  return setDoc(
-    doc(db, "tests", id),
-    {
-      public: Boolean(isPublic),
-      published_at: isPublic ? serverTimestamp() : null,
-      author_name: isPublic ? profile?.name || "" : "",
-      author_photo_url: isPublic ? photo : "",
-    },
-    { merge: true }
-  );
+  const patch = {
+    public: Boolean(isPublic),
+    published_at: isPublic ? serverTimestamp() : null,
+    author_name: isPublic ? profile?.name || "" : "",
+    author_uid: isPublic ? uid() : "",
+    author_photo_url: isPublic ? photo : "",
+  };
+  if (subjectName !== undefined) patch.subject_name = isPublic ? subjectName : "";
+  return setDoc(doc(db, "tests", id), patch, { merge: true });
+}
+
+export async function updateTest(id, { title, public: isPublic }) {
+  const patch = {};
+  if (title !== undefined) patch.title = title;
+  if (isPublic !== undefined) patch.public = Boolean(isPublic);
+  return setDoc(doc(db, "tests", id), patch, { merge: true });
 }
 
 export async function deleteTest(id) {
   await deleteDoc(doc(db, "tests", id));
-  const snap = await getDocs(query(collection(db, "test_results"), where("user_id", "==", uid())));
-  const victims = snap.docs.filter((d) => d.data().test_id === id);
-  if (!victims.length) return;
-  const batch = writeBatch(db);
-  victims.forEach((d) => batch.delete(d.ref));
-  await batch.commit();
+  await batchDelete(await ownResultsRefsForTests([id]));
 }
 
 export async function saveTestResult({
@@ -340,6 +400,56 @@ export async function getTest(id) {
   return snap.exists() ? { id, ...snap.data() } : null;
 }
 
+function mapTestDocs(snap) {
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.created_at?.toMillis?.() || 0) - (a.created_at?.toMillis?.() || 0));
+}
+
+function testTypeOk(t) {
+  return t.type === "choice" || t.type === "mixed" || !t.type;
+}
+
+/** Все тесты текущего пользователя. */
+export async function listOwnedTests() {
+  const q = query(collection(db, "tests"), where("owner_id", "==", uid()));
+  const snap = await getDocs(q);
+  return mapTestDocs(snap).filter(testTypeOk);
+}
+
+/**
+ * Тесты по набору конспектов.
+ * Один id — любой тест, где этот конспект в note_ids.
+ * Несколько — точное совпадение набора (тест «по всему предмету» на момент создания).
+ */
+export async function listTestsForNotes(ids) {
+  const list = [...(ids || [])].filter(Boolean);
+  if (!list.length) return [];
+  const all = await listOwnedTests();
+  if (list.length === 1) {
+    const id = list[0];
+    return all.filter((t) => (t.note_ids || []).includes(id));
+  }
+  const key = [...list].sort().join("|");
+  return all.filter((t) => [...(t.note_ids || [])].sort().join("|") === key);
+}
+
+/** Тесты предмета: по subject_id или по конспектам предмета. */
+export async function listTestsForSubject(subjectId, noteIds = []) {
+  if (!subjectId) return [];
+  const idSet = new Set(noteIds || []);
+  const all = await listOwnedTests();
+  return all.filter((t) => {
+    if (t.subject_id === subjectId) return true;
+    return (t.note_ids || []).some((id) => idSet.has(id));
+  });
+}
+
+export async function findTestForNotes(ids) {
+  const list = await listTestsForNotes(ids);
+  return list[0] || null;
+}
+
 /** Копия чужого публичного теста себе в предмет. */
 export async function copyTestToSubject(test, subjectId) {
   if (!test?.id) throw new Error("Нет теста");
@@ -349,6 +459,7 @@ export async function copyTestToSubject(test, subjectId) {
     owner_id: uid(),
     type: test.type || "mixed",
     modes: test.modes || ["single"],
+    size: test.size || null,
     questions: test.questions || [],
     quizlet: test.quizlet || [],
     match: test.match || [],
@@ -358,27 +469,12 @@ export async function copyTestToSubject(test, subjectId) {
     public: false,
     published_at: null,
     author_name: "",
+    author_uid: "",
+    author_photo_url: "",
+    subject_name: "",
     copied_from: test.id,
     created_at: serverTimestamp(),
   });
-}
-
-export async function listTestsForNotes(ids) {
-  const key = [...(ids || [])].sort().join("|");
-  const q = query(collection(db, "tests"), where("owner_id", "==", uid()));
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((t) => {
-      const typeOk = t.type === "choice" || t.type === "mixed" || !t.type;
-      return typeOk && [...(t.note_ids || [])].sort().join("|") === key;
-    })
-    .sort((a, b) => (b.created_at?.toMillis?.() || 0) - (a.created_at?.toMillis?.() || 0));
-}
-
-export async function findTestForNotes(ids) {
-  const list = await listTestsForNotes(ids);
-  return list[0] || null;
 }
 
 export async function listPublicNotes() {
@@ -407,6 +503,36 @@ export async function listPublicTestsForNote(noteId) {
 export async function listAllUsers() {
   const snap = await getDocs(collection(db, "users"));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function getUserProfileById(userId) {
+  const snap = await getDoc(doc(db, "users", userId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function countPublishedContent() {
+  const myUid = uid();
+  const [notesSnap, testsSnap] = await Promise.all([
+    getDocs(query(collection(db, "notes"), where("owner_id", "==", myUid), where("public", "==", true))),
+    getDocs(query(collection(db, "tests"), where("owner_id", "==", myUid), where("public", "==", true))),
+  ]);
+  return { notes: notesSnap.size, tests: testsSnap.size };
+}
+
+export async function listPublicNotesByUser(userId) {
+  const q = query(collection(db, "notes"), where("owner_id", "==", userId), where("public", "==", true));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.published_at?.toMillis?.() || 0) - (a.published_at?.toMillis?.() || 0));
+}
+
+export async function listPublicTestsByUser(userId) {
+  const q = query(collection(db, "tests"), where("owner_id", "==", userId), where("public", "==", true));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.published_at?.toMillis?.() || 0) - (a.published_at?.toMillis?.() || 0));
 }
 
 export async function listAllResults() {

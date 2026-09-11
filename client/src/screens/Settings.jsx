@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, KeyRound, Heart, RefreshCw } from "lucide-react";
+import { Bell, ChevronRight, ChevronDown, Check, KeyRound, Heart, RefreshCw } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 import { MODEL_OPTIONS, getApiKey, setApiKey, getBalance, getModel, setModel, onApiKeyChange, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import { updateUserProfile, getUserProfile } from "../api/firestore";
+import { enablePushNotifications } from "../api/push";
 import { GhostInline } from "../components/Ghost";
 import { checkForAppUpdate } from "../swUpdate";
 import { useAlert } from "../components/Alert";
@@ -91,6 +92,10 @@ export default function Settings() {
   const [balance, setBalance] = useState({ status: "idle", amount: null, error: "" });
   const [refreshTick, setRefreshTick] = useState(0);
   const [updating, setUpdating] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushOk, setPushOk] = useState(
+    typeof Notification !== "undefined" && Notification.permission === "granted"
+  );
 
   const model = getModel();
 
@@ -459,6 +464,55 @@ export default function Settings() {
       <button
         className="rowpress"
         type="button"
+        disabled={pushBusy || pushOk}
+        onClick={async () => {
+          setPushBusy(true);
+          try {
+            const token = await enablePushNotifications();
+            if (token) {
+              setPushOk(true);
+              alert("Будем сообщать, когда выйдет обновление.", { title: "Готово" });
+            } else {
+              alert(
+                Notification?.permission === "denied"
+                  ? "Разрешение на уведомления запрещено в браузере."
+                  : "Проверь VAPID-ключ или разрешение на уведомления.",
+                { title: "Не удалось" }
+              );
+            }
+          } catch (e) {
+            alert(e?.message || "Не удалось включить уведомления", { title: "Ошибка" });
+          } finally {
+            setPushBusy(false);
+          }
+        }}
+        style={{
+          width: "100%",
+          marginBottom: 8,
+          ...row(t),
+          color: t.text,
+          fontSize: 15,
+          fontFamily: "inherit",
+          cursor: pushBusy || pushOk ? "default" : "pointer",
+          textAlign: "left",
+          justifyContent: "space-between",
+          gap: 12,
+          opacity: pushBusy ? 0.7 : 1,
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Bell size={16} color={t.sub} />
+          {pushOk
+            ? "Уведомления включены"
+            : pushBusy
+              ? "Включаю…"
+              : "Уведомления об обновлениях"}
+        </span>
+        {pushOk ? <Check size={16} color={t.sub} /> : <ChevronRight size={16} color={t.sub} />}
+      </button>
+      <button
+        className="rowpress"
+        type="button"
         disabled={updating}
         onClick={async () => {
           setUpdating(true);
@@ -490,7 +544,8 @@ export default function Settings() {
         <ChevronRight size={16} color={t.sub} />
       </button>
       <div style={{ color: t.sub, fontSize: 12, lineHeight: 1.4, margin: "0 4px 8px" }}>
-        На Android в установленном приложении нельзя потянуть страницу — жми сюда после деплоя.
+        Пуш — когда выйдет релиз. Баннер «Обновить» появится и внутри приложения. На Android
+        без pull-to-refresh можно обновить кнопкой выше.
       </div>
 
       <div style={sectionTitle(t, { marginTop: 24 })}>Документы</div>

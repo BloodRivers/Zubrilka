@@ -13,8 +13,11 @@ import ScreenTransition from "./components/ScreenTransition";
 import BottomNav from "./components/BottomNav";
 import { rememberTab, backOf, onScreenTitle, isQuizActive, setQuizActive } from "./nav";
 import { getApiKey, setApiKey, syncAiUsage } from "./api/ai";
+import { syncPushTokenIfGranted } from "./api/push";
+import UpdateBanner from "./components/UpdateBanner";
 import Login from "./screens/Login";
 import Subjects from "./screens/Subjects";
+import StressTrainer from "./screens/StressTrainer";
 import SubjectHub from "./screens/SubjectHub";
 import NewNote from "./screens/NewNote";
 import NoteDetail from "./screens/NoteDetail";
@@ -23,12 +26,14 @@ import Results from "./screens/Results";
 import Settings from "./screens/Settings";
 import Account from "./screens/Account";
 import Library from "./screens/Library";
+import UserProfile from "./screens/UserProfile";
 import Legal from "./screens/Legal";
 import NotFound from "./screens/NotFound";
-import { Check } from "lucide-react";
+import { Check, Lock } from "lucide-react";
+import { TRAINER_LIST } from "./screens/StressTrainer";
 
 function titleFor(path) {
-  if (path === "/") return "Твои предметы";
+  if (path === "/") return "Главная";
   if (path === "/account") return "Аккаунт";
   if (path === "/library") return "Библиотека";
   if (path === "/settings") return "Настройки";
@@ -39,9 +44,14 @@ function titleFor(path) {
   if (/\/note\//.test(path)) return "Конспект";
   if (/\/test\//.test(path)) return "Тест";
   if (path === "/results") return "Результат";
+  if (/^\/user\//.test(path)) return "Профиль";
   if (path === "/terms") return "Условия использования";
   if (path === "/privacy") return "Конфиденциальность";
   if (path === "/cookies") return "Политика cookies";
+  if (/^\/trainer\//.test(path)) {
+  const t = TRAINER_LIST.find((x) => path.endsWith(x.id));
+  return t?.title || "Тренажёр";
+}
   if (path === "/login") return "";
   return "Забубрилка";
 }
@@ -173,6 +183,73 @@ function ConsentModal({ onAccept, onDecline, readTerms, readPrivacy, readCookies
   );
 }
 
+function GuestBlock() {
+  const { t } = useTheme();
+  const navigate = useNavigate();
+  return (
+    <div style={{ paddingTop: 48, textAlign: "center" }}>
+      <div
+        style={{
+          width: 60,
+          height: 60,
+          borderRadius: 20,
+          margin: "0 auto 18px",
+          background: t.raised,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Lock size={26} color={t.sub} />
+      </div>
+      <div style={{ color: t.text, fontSize: 17, fontWeight: 700 }}>Нужен аккаунт</div>
+      <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.5, marginTop: 8, padding: "0 24px" }}>
+        В гостевом режиме нельзя создавать конспекты и тесты. Зарегистрируйся — это бесплатно.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", marginTop: 24 }}>
+        <button
+          className="press"
+          onClick={async () => {
+            await signOut(auth).catch(() => {});
+            navigate("/login");
+          }}
+          style={{
+            padding: "14px 28px",
+            borderRadius: 999,
+            border: "none",
+            background: t.invBg,
+            color: t.inv,
+            fontSize: 15,
+            fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: "pointer",
+            minWidth: 220,
+          }}
+        >
+          Создать аккаунт
+        </button>
+        <button
+          className="press"
+          onClick={() => navigate("/library")}
+          style={{
+            padding: "12px 24px",
+            borderRadius: 999,
+            border: "none",
+            background: "transparent",
+            color: t.sub,
+            fontSize: 14,
+            fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: "pointer",
+          }}
+        >
+          Поролистать библиотеку
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Shell() {
   const { t, theme } = useTheme();
   const location = useLocation();
@@ -224,6 +301,7 @@ function Shell() {
         if (Object.keys(patch).length) await updateUserProfile(patch);
         setUserName(stored?.name || user.displayName || (user.email || "").split("@")[0]);
         await syncAiUsage().catch(() => {});
+        await syncPushTokenIfGranted().catch(() => {});
       } catch {
       } finally {
         if (alive) setNameReady(true);
@@ -249,8 +327,8 @@ function Shell() {
         resolve(true);
         return;
       }
-      alert("Прогресс теста будет потерян.", {
-        title: "Выйти из теста?",
+      alert("Прогресс будет потерян.", {
+        title: "Выйти?",
         danger: true,
         confirmLabel: "Уйти",
         onConfirm: () => {
@@ -408,13 +486,19 @@ function Shell() {
 
   useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setReady(true); }), []);
 
+  const isGuest = !!user?.isAnonymous;
+
   useEffect(() => {
     if (!user) {
       setConsentPending(false);
       return;
     }
+    if (isGuest) {
+      setConsentPending(false);
+      return;
+    }
     setConsentPending(localStorage.getItem(`zubrilka:consent:${user.uid}`) !== "1");
-  }, [user]);
+  }, [user, isGuest]);
 
   const legalPath = /^\/(terms|privacy|cookies)(\/|$)/.test(location.pathname);
 
@@ -666,7 +750,7 @@ function Shell() {
             <TopBar
               title={screenTitle || titleFor(location.pathname)}
               onBack={
-                /\/subject\/|\/note\/|\/test\/|\/results|\/(terms|privacy|cookies)/.test(location.pathname)
+                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/(terms|privacy|cookies)/.test(location.pathname)
                   ? async () => {
                       if (!(await confirmLeaveQuiz())) return;
                       const dest = backOf(location.pathname, location.state);
@@ -681,16 +765,18 @@ function Shell() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Subjects />} />
-              <Route path="/account" element={<Account />} />
+              <Route path="/trainer/:slug" element={<StressTrainer />} />
+              <Route path="/account" element={isGuest ? <GuestBlock /> : <Account />} />
               <Route path="/library" element={<Library />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/settings" element={isGuest ? <GuestBlock /> : <Settings />} />
               <Route path="/subject/:subjectId" element={<SubjectHub />} />
-              <Route path="/subject/:subjectId/new" element={<NewNote />} />
-              <Route path="/subject/:subjectId/quiz" element={<Quiz />} />
+              <Route path="/subject/:subjectId/new" element={isGuest ? <GuestBlock /> : <NewNote />} />
+              <Route path="/subject/:subjectId/quiz" element={isGuest ? <GuestBlock /> : <Quiz />} />
               <Route path="/note/:noteId" element={<NoteDetail />} />
-              <Route path="/note/:noteId/quiz" element={<Quiz />} />
+              <Route path="/note/:noteId/quiz" element={isGuest ? <GuestBlock /> : <Quiz />} />
               <Route path="/test/:testId/quiz/:mode" element={<Quiz />} />
-              <Route path="/results" element={<Results />} />
+              <Route path="/results" element={isGuest ? <GuestBlock /> : <Results />} />
+              <Route path="/user/:userId" element={<UserProfile />} />
               <Route path="/terms" element={<Legal doc="terms" />} />
               <Route path="/privacy" element={<Legal doc="privacy" />} />
               <Route path="/cookies" element={<Legal doc="cookies" />} />
@@ -698,6 +784,7 @@ function Shell() {
             </Routes>
           </ScreenTransition>
           {user && !legalPath && <BottomNav confirmLeave={confirmLeaveQuiz} />}
+          {user && !legalPath && <UpdateBanner />}
         </div>
         {consentPending && !legalPath && (
           <ConsentModal

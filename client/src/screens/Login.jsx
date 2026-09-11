@@ -5,8 +5,9 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  signInAnonymously,
 } from "firebase/auth";
-import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, UserX } from "lucide-react";
 import { auth } from "../firebase";
 import { createUserProfile } from "../api/firestore";
 import { useTheme } from "../theme/ThemeContext";
@@ -197,7 +198,21 @@ export default function Login() {
   const onGoogle = async () => {
     setBusy(true);
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      const { user } = await signInWithPopup(auth, new GoogleAuthProvider());
+      await createUserProfile({ name: user.displayName || "", email: user.email || "" }).catch(() => {});
+    } catch (err) {
+      nope();
+      const msg = humanize(err);
+      if (msg) alert(msg);
+      setBusy(false);
+    }
+  };
+
+  const onGuest = async () => {
+    setBusy(true);
+    try {
+      await signInAnonymously(auth);
+      await createUserProfile({ name: "", email: "" }).catch(() => {});
     } catch (err) {
       nope();
       const msg = humanize(err);
@@ -456,6 +471,33 @@ export default function Login() {
           }}
         >
           <GoogleG /> Продолжить с Google
+        </button>
+      </div>
+
+      <div style={{ marginTop: 10, ...anim(380) }}>
+        <button
+          className="press"
+          onClick={onGuest}
+          disabled={busy}
+          style={{
+            width: "100%",
+            padding: "14px 16px",
+            borderRadius: 999,
+            border: `1px solid ${t.border}`,
+            background: "transparent",
+            color: t.sub,
+            fontSize: 15,
+            fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: busy ? "default" : "pointer",
+            opacity: busy ? 0.6 : 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+          }}
+        >
+          <UserX size={18} /> Войти как гость
         </button>
       </div>
 
