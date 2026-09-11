@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
 import ProgressBar from "../components/ProgressBar";
 import Button from "../components/Button";
@@ -110,7 +111,7 @@ const WORD_BANK = RAW_WORDS.map(parseWord);
 const TOTAL = WORD_BANK.length;
 
 export const TRAINER_LIST = [
-  { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную" },
+  { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную", subjectId: "filologicheskiy" },
 ];
 
 function shuffle(arr) {
@@ -149,10 +150,15 @@ function Stat({ label, value, tint }) {
 
 export default function StressTrainer() {
   const { t } = useTheme();
+  const navigate = useNavigate();
+  const { slug } = useParams();
+  const trainer = TRAINER_LIST.find((t) => t.id === slug) || TRAINER_LIST[0];
   const queueRef = useRef([]);
+  const wrongWordsRef = useRef(new Set());
   const [current, setCurrent] = useState(null);
   const [mistakes, setMistakes] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
   const [locked, setLocked] = useState(false);
   const [verdict, setVerdict] = useState(null);
   const [done, setDone] = useState(false);
@@ -176,8 +182,10 @@ export default function StressTrainer() {
 
   const start = () => {
     queueRef.current = shuffle(WORD_BANK);
+    wrongWordsRef.current = new Set();
     setMistakes(0);
     setStreak(0);
+    setBestStreak(0);
     setDone(false);
     next();
   };
@@ -192,11 +200,14 @@ export default function StressTrainer() {
     const correct = idx === current.stressIndex;
     if (correct) {
       sfx.correct();
-      setStreak((s) => s + 1);
+      const ns = streak + 1;
+      setStreak(ns);
+      setBestStreak((b) => Math.max(b, ns));
     } else {
       sfx.wrong();
       setStreak(0);
       setMistakes((m) => m + 1);
+      wrongWordsRef.current.add(current.raw);
       const q = queueRef.current;
       const pos1 = Math.min(q.length, 3 + Math.floor(Math.random() * 3));
       const pos2 = Math.min(q.length, 6 + Math.floor(Math.random() * 4));
@@ -239,15 +250,55 @@ export default function StressTrainer() {
       <ProgressBar value={progress} />
 
       {done ? (
-        <div style={{ padding: "36px 22px", borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, textAlign: "center" }}>
-          <div key={mistakes} className="swap" style={{ fontSize: 30, marginBottom: 8 }}>Готово.</div>
-          <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.5 }}>
-            Все {TOTAL} слов пройдены верно.
-            <br />
-            Всего ошибок за сессию: {mistakes}
+        <div style={{ paddingTop: 12 }}>
+          <div style={{ color: t.sub, fontSize: 13, marginBottom: 6 }}>Итог тренажёра</div>
+          {mistakes === 0 ? (
+            <div style={{ color: "#46A758", fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Без ошибок — отлично!</div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+              <div style={{ color: t.text, fontSize: 40, fontWeight: 700, letterSpacing: "-0.03em" }}>
+                {TOTAL}/{TOTAL}
+              </div>
+              <div style={{ color: t.sub, fontSize: 15 }}>все слова пройдены</div>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+            <Stat label="Ошибки" value={mistakes} tint="#E5484D" />
+            <Stat label="Лучшая серия" value={bestStreak} tint="#46A758" />
           </div>
-          <div style={{ marginTop: 22 }}>
-            <Button variant="dashed" onClick={start}>Начать заново</Button>
+
+          {wrongWordsRef.current.size > 0 ? (
+            <>
+              <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Стоит повторить</div>
+              {[...wrongWordsRef.current].map((w) => (
+                <div
+                  key={w}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "14px 0",
+                    borderBottom: `1px solid ${t.border}`,
+                  }}
+                >
+                  <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>{w.toLowerCase()}</div>
+                  <div style={{ fontSize: 12, color: t.sub, border: `1px solid ${t.border}`, padding: "5px 10px", borderRadius: 999 }}>
+                    повторить
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <div style={{ color: t.sub, fontSize: 14, padding: "10px 0" }}>Орфоэпические нормы усвоены уверенно.</div>
+          )}
+
+          <div style={{ marginTop: 30, display: "flex", flexDirection: "column", gap: 10 }}>
+            {trainer.subjectId && (
+              <Button variant="dashed" onClick={() => navigate(`/subject/${trainer.subjectId}`)}>
+                Вернуться к предмету
+              </Button>
+            )}
+            <Button onClick={start}>Ещё раз</Button>
           </div>
         </div>
       ) : (
@@ -257,16 +308,16 @@ export default function StressTrainer() {
               Нажми на гласную, на которую падает ударение
             </div>
           )}
-          <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: 0, minHeight: 58, display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: 0, minHeight: 48, display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
             {current.display.split("").map((ch, idx) => {
               const isVowel = VOWELS.includes(ch);
               const slot = {
-                width: 34,
-                height: 54,
+                width: 28,
+                height: 46,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 34,
+                fontSize: 28,
                 fontWeight: 700,
                 lineHeight: 1,
               };
@@ -284,14 +335,14 @@ export default function StressTrainer() {
                   style={{
                     ...slot,
                     border: "none",
-                    borderBottom: `3px solid ${s.border}`,
+                    boxShadow: s.border === "transparent" ? undefined : `inset 0 -2.5px 0 ${s.border}`,
                     background: s.bg,
                     color: s.color,
                     fontFamily: "inherit",
                     padding: 0,
                     borderRadius: 3,
                     cursor: verdict ? "default" : "pointer",
-                    transition: "background .15s, border-color .15s, color .15s",
+                    transition: "background .15s, color .15s, box-shadow .15s",
                     boxSizing: "border-box",
                   }}
                 >

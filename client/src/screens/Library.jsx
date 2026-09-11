@@ -169,7 +169,6 @@ export default function Library() {
 
   return (
     <div>
-      {tab !== "trainers" && (
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -188,7 +187,6 @@ export default function Library() {
           outline: "none",
         }}
       />
-      )}
 
       <Segmented
         options={[
@@ -202,7 +200,7 @@ export default function Library() {
       />
 
       {tab === "trainers" ? (
-        TRAINER_LIST.map((x, i) => (
+        TRAINER_LIST.filter((x) => !q.trim() || `${x.title} ${x.sub}`.toLowerCase().includes(q.trim().toLowerCase())).map((x, i) => (
           <ListRow
             key={x.id}
             idx={i}
@@ -274,7 +272,7 @@ export default function Library() {
           Пока пусто. Опубликуй конспект или тест — и он появится здесь у всех.
         </div>
       ) : (
-        items.map((item) => (
+        items.map((item, i) => (
           <button
             key={`${item.kind}-${item.id}`}
             type="button"
@@ -298,6 +296,8 @@ export default function Library() {
               cursor: "pointer",
               textAlign: "left",
               overflow: "hidden",
+              animation: `fadeUp 460ms cubic-bezier(0.16,1,0.3,1) both`,
+              animationDelay: `${i * 60}ms`,
             }}
           >
             <div

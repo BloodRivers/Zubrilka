@@ -14,10 +14,11 @@ const FULL_TAB_META = [
 const GUEST_TAB_META = [
   { label: "Главная", icon: BookOpen },
   { label: "Библиотека", icon: Library },
+  { label: "Настройки", icon: Settings2 },
   { label: "Гость", icon: User },
 ];
 
-const GUEST_TAB_ROOTS = ["/", "/library", "/account"];
+const GUEST_TAB_ROOTS = ["/", "/library", "/settings", "/account"];
 
 export default function BottomNav({ confirmLeave }) {
   const location = useLocation();

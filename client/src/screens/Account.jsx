@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { signOut, deleteUser } from "firebase/auth";
-import { Download, Camera } from "lucide-react";
+import { Download, Camera, Pencil } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
@@ -248,6 +248,7 @@ export default function Account() {
             fontFamily: "inherit",
           }}
         />
+        <Pencil size={15} color={t.sub} style={{ flexShrink: 0 }} />
       </div>
 
       <div style={sectionTitle(t)}>Статистика</div>

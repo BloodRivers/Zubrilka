@@ -535,8 +535,14 @@ function Shell() {
     setDir((location.state?.dir) || "fwd");
     setEntered(false);
     setAnimKey((k) => k + 1);
-    const id = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(id);
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setEntered(true));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
   }, [location.pathname]);
 
   const splash = (title, sub) => (
@@ -768,7 +774,7 @@ function Shell() {
               <Route path="/trainer/:slug" element={<StressTrainer />} />
               <Route path="/account" element={isGuest ? <GuestBlock /> : <Account />} />
               <Route path="/library" element={<Library />} />
-              <Route path="/settings" element={isGuest ? <GuestBlock /> : <Settings />} />
+              <Route path="/settings" element={<Settings isGuest={isGuest} />} />
               <Route path="/subject/:subjectId" element={<SubjectHub />} />
               <Route path="/subject/:subjectId/new" element={isGuest ? <GuestBlock /> : <NewNote />} />
               <Route path="/subject/:subjectId/quiz" element={isGuest ? <GuestBlock /> : <Quiz />} />

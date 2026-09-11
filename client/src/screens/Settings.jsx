@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, ChevronRight, ChevronDown, Check, KeyRound, Heart, RefreshCw } from "lucide-react";
+import { signOut } from "firebase/auth";
+import { Bell, ChevronRight, ChevronDown, Check, KeyRound, Heart, RefreshCw, Lock } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { auth } from "../firebase";
 import { MODEL_OPTIONS, getApiKey, setApiKey, getBalance, getModel, setModel, onApiKeyChange, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import { updateUserProfile, getUserProfile } from "../api/firestore";
 import { enablePushNotifications } from "../api/push";
@@ -81,7 +83,7 @@ const input = (t) => ({
   fontFamily: "inherit",
 });
 
-export default function Settings() {
+export default function Settings({ isGuest }) {
   const { pref, setPref, t, theme } = useTheme();
   const { alert } = useAlert();
   const navigate = useNavigate();
@@ -241,6 +243,38 @@ export default function Settings() {
 
       <div style={sectionTitle(t, { marginTop: 24 })}>Модель ИИ</div>
 
+      {isGuest ? (
+        <div style={{ ...row(t), flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: t.text, fontSize: 15, fontWeight: 600 }}>
+            <Lock size={14} color={t.sub} />
+            Доступно после регистрации
+          </div>
+          <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45 }}>
+            Настройка ключа и модели ИИ — для владельцев аккаунта. Регистрация бесплатная.
+          </div>
+          <button
+            className="press"
+            onClick={async () => {
+              await signOut(auth).catch(() => {});
+              navigate("/login");
+            }}
+            style={{
+              border: "none",
+              background: t.invBg,
+              color: t.inv,
+              fontSize: 14,
+              fontWeight: 600,
+              fontFamily: "inherit",
+              padding: "10px 18px",
+              borderRadius: 999,
+              cursor: "pointer",
+            }}
+          >
+            Создать аккаунт
+          </button>
+        </div>
+      ) : (
+        <>
       <div
         style={{
           ...row(t),
@@ -390,6 +424,8 @@ export default function Settings() {
           </>
         )}
       </div>
+      </>
+      )}
 
       <div style={sectionTitle(t, { marginTop: 24 })}>Поддержка</div>
       {SOCIAL_LINKS.map(({ label, href, Icon }) => (
