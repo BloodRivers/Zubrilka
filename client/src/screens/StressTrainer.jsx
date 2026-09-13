@@ -112,6 +112,7 @@ const TOTAL = WORD_BANK.length;
 
 export const TRAINER_LIST = [
   { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную", egeSubject: "russian" },
+  { id: "paronyms", title: "Паронимы", sub: "Словник ЕГЭ — выбери слово по смыслу контекста", egeSubject: "russian" },
 ];
 
 function shuffle(arr) {
@@ -123,7 +124,7 @@ function shuffle(arr) {
   return a;
 }
 
-function Stat({ label, value, tint }) {
+export function Stat({ label, value, tint }) {
   const { t } = useTheme();
   return (
     <div
@@ -243,8 +244,8 @@ export default function StressTrainer() {
   return (
     <div style={{ paddingTop: 4 }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <Stat label="Осталось" value={remaining} />
         <Stat label="Серия" value={streak} tint="#46A758" />
+        <Stat label="Осталось" value={remaining} />
         <Stat label="Ошибки" value={mistakes} tint="#E5484D" />
       </div>
       <ProgressBar value={progress} />

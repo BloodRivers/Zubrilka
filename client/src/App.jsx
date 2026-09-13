@@ -17,7 +17,7 @@ import { syncPushTokenIfGranted } from "./api/push";
 import UpdateBanner from "./components/UpdateBanner";
 import Login from "./screens/Login";
 import Subjects from "./screens/Subjects";
-import StressTrainer from "./screens/StressTrainer";
+import Trainer from "./screens/Trainer";
 import EgeHub, { EGE_SUBJECTS } from "./screens/EgeHub";
 import SubjectHub from "./screens/SubjectHub";
 import NewNote from "./screens/NewNote";
@@ -776,7 +776,7 @@ function Shell() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Subjects />} />
-              <Route path="/trainer/:slug" element={<StressTrainer />} />
+              <Route path="/trainer/:slug" element={<Trainer />} />
               <Route path="/ege/:slug" element={<EgeHub />} />
               <Route path="/account" element={isGuest ? <GuestBlock /> : <Account />} />
               <Route path="/library" element={<Library />} />
