@@ -50,7 +50,7 @@ function titleFor(path) {
   if (path === "/privacy") return "Конфиденциальность";
   if (path === "/cookies") return "Политика cookies";
   if (/^\/trainer\//.test(path)) {
-  const t = TRAINER_LIST.find((x) => path.endsWith(x.id));
+  const t = TRAINER_LIST.find((x) => path.endsWith(x.id) || path.startsWith(`/trainer/${x.id}/`));
   return t?.title || "Тренажёр";
 }
   if (/^\/ege\//.test(path)) {
@@ -776,6 +776,7 @@ function Shell() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Subjects />} />
+              <Route path="/trainer/:slug/:level" element={<Trainer />} />
               <Route path="/trainer/:slug" element={<Trainer />} />
               <Route path="/ege/:slug" element={<EgeHub />} />
               <Route path="/account" element={isGuest ? <GuestBlock /> : <Account />} />

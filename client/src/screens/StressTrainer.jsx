@@ -113,6 +113,8 @@ const TOTAL = WORD_BANK.length;
 export const TRAINER_LIST = [
   { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную", egeSubject: "russian" },
   { id: "paronyms", title: "Паронимы", sub: "Словник ЕГЭ — выбери слово по смыслу контекста", egeSubject: "russian" },
+  { id: "pronouns", title: "Разряды местоимений", sub: "Личные, возвратное, притяжательные и другие разряды — выбери уровень", egeSubject: "russian" },
+  { id: "roots", title: "Корни. ЕГЭ №9", sub: "Чередующиеся корни гер/гор, бер/бир и другие — введи пропущенную букву", egeSubject: "russian" },
 ];
 
 function shuffle(arr) {
