@@ -20,7 +20,7 @@ export function AlertProvider({ children }) {
     cancelRef.current = opts.onCancel ?? null;
     setState({
       message,
-      title: opts.title ?? "Ошибка",
+      title: opts.title ?? (opts.onConfirm ? "Подтверждение" : "Ошибка"),
       shake: opts.shake ?? (!opts.title && !opts.onConfirm),
       leaving: false,
       okLabel: opts.okLabel ?? "ОК",
