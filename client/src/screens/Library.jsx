@@ -5,11 +5,11 @@ import { GhostLibrary, useGhostHold } from "../components/Ghost";
 import Segmented from "../components/Segmented";
 import Avatar from "../components/Avatar";
 import ListRow from "../components/ListRow";
-import { Brain } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 import { listPublicNotes, listPublicTests } from "../api/firestore";
 import { testSizeLabel } from "../api/backend";
 import { setReturnTo } from "../nav";
-import { TRAINER_LIST } from "./StressTrainer";
+import { EGE_SUBJECTS } from "./EgeHub";
 
 function testModeChips(test) {
   const modes = Array.isArray(test?.modes) ? test.modes : [];
@@ -156,7 +156,7 @@ export default function Library() {
           options={[
             { v: "notes", label: "Конспекты" },
             { v: "tests", label: "Тесты" },
-            { v: "trainers", label: "Тренажёры" },
+            { v: "ege", label: "ЕГЭ" },
           ]}
           value={tab}
           onChange={setTab}
@@ -192,22 +192,22 @@ export default function Library() {
         options={[
           { v: "notes", label: "Конспекты" },
           { v: "tests", label: "Тесты" },
-          { v: "trainers", label: "Тренажёры" },
+          { v: "ege", label: "ЕГЭ" },
         ]}
         value={tab}
         onChange={setTab}
         style={{ marginBottom: 10 }}
       />
 
-      {tab === "trainers" ? (
-        TRAINER_LIST.filter((x) => !q.trim() || `${x.title} ${x.sub}`.toLowerCase().includes(q.trim().toLowerCase())).map((x, i) => (
+      {tab === "ege" ? (
+        EGE_SUBJECTS.filter((s) => !q.trim() || `${s.title} ${s.sub}`.toLowerCase().includes(q.trim().toLowerCase())).map((s, i) => (
           <ListRow
-            key={x.id}
+            key={s.id}
             idx={i}
-            icon={<Brain size={20} color={t.text} strokeWidth={2} />}
-            title={x.title}
-            sub={x.sub}
-            onClick={() => navigate(`/trainer/${x.id}`)}
+            icon={<GraduationCap size={20} color={t.text} strokeWidth={2} />}
+            title={s.title}
+            sub={s.sub}
+            onClick={() => navigate(`/ege/${s.id}`)}
           />
         ))
       ) : (

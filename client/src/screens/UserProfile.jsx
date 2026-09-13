@@ -40,32 +40,39 @@ export default function UserProfile() {
     };
   }, [userId]);
 
-  if (showGhost) {
-    return (
-      <div aria-busy="true">
-        <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "4px 2px 20px" }}>
-          <Bone width={64} height={64} radius={999} />
-          <div style={{ flex: 1 }}>
-            <Bone width="55%" height={20} radius={8} />
-            <Bone width="40%" height={12} radius={6} style={{ marginTop: 10 }} />
-          </div>
+  const ghostBlock = (
+    <div aria-busy="true">
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "4px 2px 20px" }}>
+        <Bone width={64} height={64} radius={999} />
+        <div style={{ flex: 1 }}>
+          <Bone width="55%" height={20} radius={8} />
+          <Bone width="40%" height={12} radius={6} style={{ marginTop: 10 }} />
         </div>
-        <Bone width="100%" height={52} radius={18} />
-        <Bone width="100%" height={52} radius={18} style={{ marginTop: 10 }} />
-        <Bone width="100%" height={52} radius={18} style={{ marginTop: 10 }} />
       </div>
-    );
-  }
+      <Bone width="100%" height={52} radius={18} />
+      <Bone width="100%" height={52} radius={18} style={{ marginTop: 10 }} />
+      <Bone width="100%" height={52} radius={18} style={{ marginTop: 10 }} />
+    </div>
+  );
 
-  const name = profile?.name || "Пользователь";
+  if (showGhost) return ghostBlock;
+
+  // Чужой профиль недоступен для чтения (rules), поэтому имя/фото берём
+  // из его публикаций. Нет ни профиля, ни публикаций — показываем скелетон.
+  const pub = notes[0] || tests[0];
+  const name = profile?.name || pub?.author_name || "";
+  const photo = profile?.photo_url || pub?.author_photo_url || "";
+  if (ready && !profile && !pub) return ghostBlock;
+
+  const displayName = name || "Пользователь";
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "2px 2px 20px" }}>
-        <Avatar name={name} src={profile?.photo_url || ""} size={64} />
+        <Avatar name={displayName} src={photo} size={64} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: t.text, fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {name}
+            {displayName}
           </div>
           <div style={{ color: t.sub, fontSize: 13, marginTop: 4 }}>
             {notes.length} конспект{plural(notes.length)} · {tests.length} тест{pluralTest(tests.length)} в библиотеке

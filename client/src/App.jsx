@@ -18,6 +18,7 @@ import UpdateBanner from "./components/UpdateBanner";
 import Login from "./screens/Login";
 import Subjects from "./screens/Subjects";
 import StressTrainer from "./screens/StressTrainer";
+import EgeHub, { EGE_SUBJECTS } from "./screens/EgeHub";
 import SubjectHub from "./screens/SubjectHub";
 import NewNote from "./screens/NewNote";
 import NoteDetail from "./screens/NoteDetail";
@@ -51,6 +52,10 @@ function titleFor(path) {
   if (/^\/trainer\//.test(path)) {
   const t = TRAINER_LIST.find((x) => path.endsWith(x.id));
   return t?.title || "Тренажёр";
+}
+  if (/^\/ege\//.test(path)) {
+  const s = EGE_SUBJECTS.find((x) => path.endsWith(x.id));
+  return s?.title || "ЕГЭ";
 }
   if (path === "/login") return "";
   return "Забубрилка";
@@ -756,7 +761,7 @@ function Shell() {
             <TopBar
               title={screenTitle || titleFor(location.pathname)}
               onBack={
-                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/(terms|privacy|cookies)/.test(location.pathname)
+                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/ege\/|\/(terms|privacy|cookies)/.test(location.pathname)
                   ? async () => {
                       if (!(await confirmLeaveQuiz())) return;
                       const dest = backOf(location.pathname, location.state);
@@ -772,6 +777,7 @@ function Shell() {
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Subjects />} />
               <Route path="/trainer/:slug" element={<StressTrainer />} />
+              <Route path="/ege/:slug" element={<EgeHub />} />
               <Route path="/account" element={isGuest ? <GuestBlock /> : <Account />} />
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings isGuest={isGuest} />} />

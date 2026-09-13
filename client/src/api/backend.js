@@ -26,18 +26,17 @@ const SYSTEM_STRUCTURE =
   + '{"subject":"предмет или пусто","title":"короткое название",'
   + '"text":"очищенный текст конспекта без дублей",'
   + '"retelling":"связный пересказ всего конспекта своими словами",'
-  + '"plan":[{"title":"раздел","summary":"краткое содержание раздела 1–2 предложения","items":[{"title":"пункт","summary":"краткое содержание","items":[{"title":"подпункт","summary":"краткое содержание"}]}]}]}. '
-  + "plan/retelling только из text. "
-  + "retelling — краткий, но объёмный: охвати все темы и ключевые идеи, "
-  + "без списков и без новых фактов; 1–3 плотных абзаца. "
-  + "plan — ПОЛНЫЙ иерархический план повторения, охватывающий весь материал: "
-  + "уровень 0 (разделы) — всегда минимум 3 раздела, для большого конспекта — 5–8; "
-  + "каждый раздел — всегда минимум 2–3 пункта, для крупных тем — 4–6 пунктов; "
-  + "уровень 2 (подпункты) — для крупных пунктов 2–4 подпункта, для мелких может отсутствовать; "
-  + "у каждого узла плана — summary своими словами: у разделов 2–3 предложения (ключевые идеи и связи), у пунктов 1–2 предложения, у подпунктов — одно короткое; "
-  + "в JSON пиши только title/summary/items (нумерацию I/1/а рисует интерфейс). "
-  + "plan ОБЯЗАТЕЛЕН и никогда не пуст. "
-  + "ВСЮ математику (формулы, выражения, индексы) в text и plan пиши в LaTeX: инлайн — $...$, отдельная строка — $$...$$; без них математика не отобразится.";
+  + '"summary":[{"title":"тема блока","body":"содержимое блока в Markdown"}]}. '
+  + "summary — главное: полный конспект, разбитый на блоки-аккордеоны; блоков минимум 3, для большого конспекта 5–8, "
+  + "каждый блок со своим title+body (не сливай весь конспект в один блок). "
+  + "Названия title — по смыслу темы, без слов «раздел/подраздел» и без нумерации. "
+  + "Вложенные блоки внутри — заголовками '###' (станут вложенными аккордеонами). "
+  + "В body — Markdown: маркированные и нумерованные списки, таблицы '| столбец | столбец |' с разделителем '|---|---|' и строками, "
+  + "вся математика в LaTeX $...$ инлайн и $$...$$ отдельной строкой. "
+  + "Заголовков '##' внутри body быть не должно — только title блока. "
+  + "retelling — связный пересказ 1–3 плотных абзаца, без списков и новых фактов. "
+  + "summary/retelling только из text. "
+  + "ВСЮ математику в text, retelling и summary пиши в LaTeX: инлайн — $...$, отдельная строка — $$...$$; без них математика не отобразится.";
 
 /** Когда полный текст уже есть (PDF/файл) — ИИ не должен его переписывать и обрезать. */
 const SYSTEM_STRUCTURE_META =
@@ -46,66 +45,41 @@ const SYSTEM_STRUCTURE_META =
   + "Верни ТОЛЬКО JSON БЕЗ поля text: "
   + '{"subject":"предмет или пусто","title":"короткое название",'
   + '"retelling":"связный пересказ своими словами",'
-  + '"plan":[{"title":"раздел","summary":"краткое содержание раздела 1–2 предложения","items":[{"title":"пункт","summary":"краткое содержание","items":[{"title":"подпункт","summary":"краткое содержание"}]}]}]}. '
-  + "plan/retelling только из входного текста. "
+  + '"summary":[{"title":"тема блока","body":"содержимое блока в Markdown"}]}. '
+  + "summary — главное: полный конспект, разбитый на блоки-аккордеоны; блоков минимум 3, для большого конспекта 5–8, "
+  + "каждый блок со своим title+body (не сливай весь конспект в один блок). "
+  + "Названия title — по смыслу темы, без слов «раздел/подраздел» и без нумерации. "
+  + "Вложенные блоки внутри — заголовками '###' (станут вложенными аккордеонами). "
+  + "В body — Markdown: маркированные и нумерованные списки, таблицы '| столбец | столбец |' с разделителем '|---|---|' и строками, "
+  + "вся математика в LaTeX $...$ инлайн и $$...$$ отдельной строкой. "
+  + "Заголовков '##' внутри body быть не должно — только title блока. "
   + "retelling — 1–3 плотных абзаца по всем темам. "
-  + "plan — полный иерархический план повторения (title + summary + items), охватывающий весь материал: минимум 3 раздела, у каждого раздела 2–6 пунктов, у крупных пунктов — подпункты; summaries своими словами (у разделов 2–3 предложения, у пунктов 1–2). "
-  + "plan ОБЯЗАТЕЛЕН и никогда не пуст. "
-  + "ВСЮ математику (формулы, выражения, индексы) в retelling и plan пиши в LaTeX: инлайн — $...$, отдельная строка — $$...$$; без них математика не отобразится.";
+  + "ВСЮ математику в retelling и summary пиши в LaTeX: инлайн — $...$, отдельная строка — $$...$$; без них математика не отобразится.";
 
+const SYSTEM_SUMMARY =
+  "Ты составляешь структурированный конспект для чтения. На вход — пересказ и текст исходного конспекта. "
+  + "Выдели главное: определения, формулы, даты, связи, выводы. "
+  + "Разбей на блоки-аккордеоны (минимум 3, для большого конспекта 5–8), каждый блок — свой аккордеон, не сливай всё в один body. "
+  + 'Верни ТОЛЬКО JSON: {"summary":[{"title":"тема блока","body":"содержимое в Markdown"}]}. '
+  + "Названия title — по смыслу темы, без слов «раздел/подраздел» и без нумерации. "
+  + "В body — маркированные и нумерованные списки, таблицы '| столбец | столбец |' с разделителем '|---|---|' и строками, "
+  + "вся математика в LaTeX: инлайн $...$, отдельной строкой $$...$$; вложенные блоки внутри — заголовками '###'. "
+  + "Заголовков '##' внутри body быть не должно. "
+  + "Только факты из исходника, ничего не выдумывай, не повторяй одинаковые блоки, "
+  + "не открывай блок словами 'Основные моменты:' — сразу содержимое.";
 
-function normalizePlan(plan) {
-  if (typeof plan === "string" && plan.trim()) {
-    return plan
-      .split(/\n+/)
-      .map((l) => l.replace(/^[\s\d.▪•-]+/, "").trim())
-      .filter(Boolean)
-      .map((title) => ({ title, summary: "", items: [] }));
+/** Разделы конспекта: [{title, body}] — содержимое рендерится как Markdown. */
+export function normalizeSummary(summary) {
+  if (typeof summary === "string" && summary.trim()) {
+    return [{ title: "Конспект", body: summary.trim() }];
   }
-  if (!Array.isArray(plan)) return [];
-  return plan
-    .map((node) => {
-      if (typeof node === "string") {
-        const title = node.trim();
-        return title ? { title, summary: "", items: [] } : null;
-      }
-      const title = String(node?.title || node?.text || "").trim();
-      if (!title) return null;
-      const summary = String(node?.summary || "").trim();
-      const raw = node?.items ?? node?.children;
-      const items = Array.isArray(raw)
-        ? raw
-            .map((child) => {
-              if (typeof child === "string") {
-                const t = child.trim();
-                return t ? { title: t, summary: "", items: [] } : null;
-              }
-              const t = String(child?.title || child?.text || "").trim();
-              if (!t) return null;
-              const csum = String(child?.summary || "").trim();
-              const leaves = child?.items ?? child?.children;
-              return {
-                title: t,
-                summary: csum,
-                items: Array.isArray(leaves)
-                  ? leaves
-                      .map((leaf) => {
-                        if (typeof leaf === "string") {
-                          const lt = leaf.trim();
-                          return lt ? { title: lt, summary: "" } : null;
-                        }
-                        const lt = String(leaf?.title || leaf?.text || "").trim();
-                        return lt ? { title: lt, summary: String(leaf?.summary || "").trim() } : null;
-                      })
-                      .filter(Boolean)
-                  : [],
-              };
-            })
-            .filter(Boolean)
-        : [];
-      return { title, summary, items };
-    })
-    .filter(Boolean);
+  if (!Array.isArray(summary)) return [];
+  return summary
+    .map((s) => ({
+      title: String(s?.title || "").trim() || "Раздел",
+      body: String(s?.body || s?.text || "").trim(),
+    }))
+    .filter((s) => s.body);
 }
 
 export const ALL_TEST_MODES = ["single", "multi", "quizlet", "match", "written"];
@@ -442,8 +416,24 @@ export async function structureNote(transcript, opts = {}) {
   }
   if (!structured.title) structured.title = "Конспект";
   structured.retelling = String(structured.retelling || "").trim();
-  structured.plan = normalizePlan(structured.plan);
+  structured.summary = normalizeSummary(structured.summary);
+  structured.plan = null;
   return structured;
+}
+
+/** Собрать читаемый конспект для вкладки «Конспект»: разделы-аккордеоны с таблицами и формулами. */
+export async function generateSummary(note) {
+  const source = buildNoteContext([note]);
+  if (!source.trim()) throw new Error("Нет материала для конспекта");
+  const raw = await aiJSON({
+    name: "generate-summary",
+    system: SYSTEM_SUMMARY,
+    prompt: `Исходный материал:\n\n${source}`,
+    maxTokens: 6000,
+  });
+  const summary = normalizeSummary(raw?.summary);
+  if (!summary.length) throw new Error("Модель не вернула конспект — попробуй ещё раз");
+  return summary;
 }
 
 
@@ -495,7 +485,7 @@ export async function generateTest(noteIds, modesOrType) {
   if (selected.includes("quizlet") && !hasQuizlet) {
     throw new Error("Модель не вернула карточки квизлета — попробуй ещё раз");
   }
-  if (selected.includes("match") && normalized.match.length < 4) {
+  if (selected.includes("match") && normalized.match.length < 2) {
     throw new Error("Модель вернула слишком мало пар для сопоставления — попробуй ещё раз");
   }
   if (selected.includes("written") && !hasWritten) {

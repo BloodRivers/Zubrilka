@@ -111,7 +111,7 @@ const WORD_BANK = RAW_WORDS.map(parseWord);
 const TOTAL = WORD_BANK.length;
 
 export const TRAINER_LIST = [
-  { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную", subjectId: "filologicheskiy" },
+  { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную", egeSubject: "russian" },
 ];
 
 function shuffle(arr) {
@@ -293,9 +293,9 @@ export default function StressTrainer() {
           )}
 
           <div style={{ marginTop: 30, display: "flex", flexDirection: "column", gap: 10 }}>
-            {trainer.subjectId && (
-              <Button variant="dashed" onClick={() => navigate(`/subject/${trainer.subjectId}`)}>
-                Вернуться к предмету
+            {trainer.egeSubject && (
+              <Button variant="dashed" onClick={() => navigate(`/ege/${trainer.egeSubject}`)}>
+                Вернуться к ЕГЭ
               </Button>
             )}
             <Button onClick={start}>Ещё раз</Button>

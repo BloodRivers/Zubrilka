@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { BookmarkPlus, Plus } from "lucide-react";
+import { BookmarkPlus, Plus, Sparkles } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
@@ -9,10 +9,11 @@ import Button from "../components/Button";
 import Segmented from "../components/Segmented";
 import SharedAuthorBar from "../components/AuthorBar";
 import MathText from "../components/MathText";
+import MarkdownText from "../components/MarkdownText";
 import SaveToSubjectModal from "../components/SaveToSubjectModal";
 import { GhostNote, useGhostHold } from "../components/Ghost";
-import { getNote, listSubjects, copyNoteToSubject, listTestsForNotes, listPublicTestsForNote } from "../api/firestore";
-import { testSizeLabel } from "../api/backend";
+import { getNote, listSubjects, copyNoteToSubject, listTestsForNotes, listPublicTestsForNote, updateNoteSummary } from "../api/firestore";
+import { testSizeLabel, generateSummary, normalizeSummary } from "../api/backend";
 
 function testHasContent(t) {
   return (t?.questions?.length || 0) > 0
@@ -24,101 +25,134 @@ function testHasContent(t) {
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV"];
 function toRoman(i) { return ROMAN[i] || String(i + 1); }
-function toLetter(i) { return String.fromCharCode(97 + (i % 26)); }
 
-function normalizePlan(plan) {
-  if (!Array.isArray(plan) || plan.length === 0) return [];
-  return plan.map((node) => {
-    if (typeof node === "string") {
-      const title = node.trim();
-      return title ? { title, summary: "", items: [] } : null;
-    }
-    const title = String(node?.title || node?.text || "").trim();
-    if (!title) return null;
-    const summary = String(node?.summary || "").trim();
-    const raw = node?.items ?? node?.children;
-    const items = Array.isArray(raw)
-      ? raw.map((child) => {
-          if (typeof child === "string") {
-            const t = child.trim();
-            return t ? { title: t, summary: "", items: [] } : null;
-          }
-          const t = String(child?.title || child?.text || "").trim();
-          if (!t) return null;
-          const leaves = child?.items ?? child?.children;
-          return {
-            title: t,
-            summary: String(child?.summary || "").trim(),
-            items: Array.isArray(leaves)
-              ? leaves.map((leaf) => {
-                  if (typeof leaf === "string") {
-                    const lt = leaf.trim();
-                    return lt ? { title: lt, summary: "" } : null;
-                  }
-                  const lt = String(leaf?.title || leaf?.text || "").trim();
-                  return lt ? { title: lt, summary: String(leaf?.summary || "").trim() } : null;
-                }).filter(Boolean)
-              : [],
-          };
-        }).filter(Boolean)
-      : [];
-    return { title, summary, items };
-  }).filter(Boolean);
+/** Убрать из заголовка назойливые «Раздел/Подраздел/Глава…» и их нумерацию. */
+function cleanTitle(raw) {
+  const t = String(raw || "").trim().replace(/^(Подраздел|Раздел|Глава|Параграф|Часть|Тема)\s*(\d+|[IVXLC]+)?\s*[.:–—-]?\s*/i, "").trim();
+  return t || String(raw || "").trim();
 }
 
-function PlanMarker({ label, t }) {
-  return (
-    <div style={{ minWidth: 28, color: t.sub, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0, marginTop: 1, lineHeight: 1.4 }}>
-      {label}
-    </div>
-  );
+function fallbackTitle(body) {
+  const first = String(body || "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l && !/^[#|]/.test(l) && l.length > 2);
+  return first ? first.slice(0, 48) : "";
 }
 
-function PlanRow({ label, title, summary, t, pad = 0, strong = false }) {
-  return (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", paddingLeft: pad }}>
-      <PlanMarker label={label} t={t} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <MathText as="div" text={title} style={{ color: t.text, fontSize: strong ? 15 : 14, fontWeight: strong ? 600 : 400, lineHeight: 1.45 }} />
-        {summary && (
-          <MathText as="div" text={summary} style={{ color: t.sub, fontSize: 13, lineHeight: 1.5, marginTop: 4, whiteSpace: "pre-wrap" }} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function InteractivePlan({ plan, t }) {
-  const sections = normalizePlan(plan);
-  const [open, setOpen] = useState(null);
-  if (!sections.length) {
-    return <div style={{ color: t.sub, fontSize: 14, padding: "12px 0" }}>Плана пока нет.</div>;
+/** Привести summary в один Markdown, где разделы — заголовки '##', подразделы — '###'. */
+function summaryToText(summary) {
+  if (typeof summary === "string" && summary.trim()) return summary.trim();
+  if (Array.isArray(summary)) {
+    return summary
+      .map((s) => {
+        const body = String(s?.body || s?.text || "").trim();
+        if (!body) return "";
+        const title = String(s?.title || "").trim() || fallbackTitle(body);
+        return `## ${title}\n\n${body}`;
+      })
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
   }
+  return "";
+}
+
+/** Разбить Markdown на дерево аккордеонов: ## → разделы, ### → вложенные подразделы. */
+function sectionsFromMarkdown(text) {
+  const root = [];
+  const body = [];
+  let l1 = null;
+  let l2 = null;
+  const pushBody = () => {
+    const target = l2 || l1;
+    if (target && body.length) {
+      const t = body.join("\n").trim();
+      if (t) target.body = target.body ? `${target.body}\n\n${t}` : t;
+    }
+    body.length = 0;
+  };
+  for (const line of String(text).replace(/\r/g, "").split("\n")) {
+    if (/^#{4,}\s+/.test(line)) {
+      body.push(line.trim().replace(/^#+\s+/, ""));
+      continue;
+    }
+    const sub = /^###\s+(.*)$/.exec(line);
+    if (sub && l1) {
+      const raw = cleanTitle(sub[1]);
+      if (raw) {
+        pushBody();
+        const node = { title: raw, body: "", items: [] };
+        l2 = node;
+        l1.items.push(node);
+        continue;
+      }
+    }
+    const sec = /^(#|##)\s+(.*)$/.exec(line);
+    if (sec) {
+      const raw = cleanTitle(sec[2]);
+      if (raw) {
+        pushBody();
+        const node = { title: raw, body: "", items: [] };
+        l1 = node;
+        l2 = null;
+        root.push(node);
+        continue;
+      }
+    }
+    body.push(line);
+  }
+  pushBody();
+  return root;
+}
+
+function SummaryTree({ nodes, t }) {
+  const [open, setOpen] = useState({});
   return (
     <div>
-      {sections.map((section, i) => (
+      {nodes.map((node, i) => (
         <Accordion
           key={i}
-          title={`${toRoman(i)}. ${section.title}`}
+          title={node.title}
+          open={!!open[i]}
+          onToggle={() => setOpen({ ...open, [i]: !open[i] })}
+        >
+          {node.body && <MarkdownText text={node.body} t={t} />}
+          {node.items.length > 0 && (
+            <div style={{ paddingTop: node.body ? 4 : 0 }}>
+              <SummaryTree nodes={node.items} t={t} />
+            </div>
+          )}
+        </Accordion>
+      ))}
+    </div>
+  );
+}
+
+function SummaryView({ summary, t }) {
+  const sections = useMemo(() => sectionsFromMarkdown(summaryToText(summary)), [summary]);
+  const [open, setOpen] = useState(null);
+  if (!sections.length) return null;
+  return (
+    <div>
+      {sections.map((s, i) => (
+        <Accordion
+          key={i}
+          title={`${toRoman(i)}. ${s.title}`}
           open={open === i}
           onToggle={() => setOpen(open === i ? null : i)}
         >
-          {section.summary && (
-            <MathText
-              text={section.summary}
-              style={{ color: t.sub, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 10 }}
-            />
-          )}
-          {(section.items || []).map((item, j) => (
-            <div key={j}>
-              <PlanRow label={`${j + 1}.`} title={item.title} summary={item.summary} t={t} pad={18} />
-              {(item.items || []).map((leaf, k) => (
-                <PlanRow key={k} label={`${toLetter(k)}.`} title={leaf.title} summary={leaf.summary} t={t} pad={40} />
-              ))}
+          {s.body && <MarkdownText text={s.body} t={t} />}
+          {s.items.length > 0 && (
+            <div style={{ paddingTop: s.body ? 4 : 0 }}>
+              <SummaryTree nodes={s.items} t={t} />
             </div>
-          ))}
+          )}
         </Accordion>
       ))}
+      <div style={{ color: t.sub, fontSize: 13, marginTop: 14 }}>
+        Конспект собран моделью по тексту. Если раздел кажется неполным — открой «Текст» и сравни с оригиналом.
+      </div>
     </div>
   );
 }
@@ -144,11 +178,12 @@ export default function NoteDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const [note, setNote] = useState(null);
-  const [tab, setTab] = useState("plan");
+  const [tab, setTab] = useState("summary");
   const [saveOpen, setSaveOpen] = useState(false);
   const [subjects, setSubjects] = useState([]);
   const [saving, setSaving] = useState(false);
   const [tests, setTests] = useState([]);
+  const [genBusy, setGenBusy] = useState(false);
   const showGhost = useGhostHold(!note);
 
   useEffect(() => {
@@ -187,7 +222,9 @@ export default function NoteDetail() {
   const tabs = useMemo(() => {
     if (!note || note.missing) return [];
     const list = [];
-    if (normalizePlan(note.plan).length || note.retelling?.trim()) list.push({ v: "plan", label: "План" });
+    const hasContent = note.text?.trim() || note.retelling?.trim();
+    if (hasContent || normalizeSummary(note.summary).length) list.push({ v: "summary", label: "Конспект" });
+    if (note.retelling?.trim()) list.push({ v: "retelling", label: "Пересказ" });
     if (note.text?.trim()) list.push({ v: "text", label: "Текст" });
     list.push({ v: "tests", label: "Тесты", badge: tests.length });
     return list;
@@ -197,6 +234,22 @@ export default function NoteDetail() {
     if (!tabs.length) return;
     if (!tabs.some((x) => x.v === tab)) setTab(tabs[0].v);
   }, [tabs, tab]);
+
+  const makeSummary = async () => {
+    if (!note || genBusy) return;
+    setGenBusy(true);
+    try {
+      const summary = await generateSummary(note);
+      setNote({ ...note, summary });
+      if (!isForeign) {
+        await updateNoteSummary(note.id, summary).catch((e) => console.warn("[nodedetail] save summary:", e));
+      }
+    } catch (e) {
+      alert(e?.message || "Не удалось сгенерировать конспект");
+    } finally {
+      setGenBusy(false);
+    }
+  };
 
   const openSave = async () => {
     try {
@@ -233,8 +286,7 @@ export default function NoteDetail() {
     );
   }
 
-  const hasPlan = normalizePlan(note.plan).length;
-  const retellingOnly = !hasPlan && note.retelling?.trim();
+  const hasSummary = normalizeSummary(note.summary).length;
 
   return (
     <div>
@@ -258,17 +310,39 @@ export default function NoteDetail() {
         />
       )}
 
-      {tab === "plan" && (
-        <>
-          {retellingOnly && (
-            <div style={{ color: t.text, fontSize: 15, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-              {note.retelling.trim()}
+      {tab === "retelling" && note.retelling?.trim() && (
+        <div>
+          <MathText
+            text={note.retelling.trim()}
+            style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
+          />
+          <div style={{ color: t.sub, fontSize: 13, marginTop: 16 }}>
+            Пересказ собран моделью по тексту конспекта.
+          </div>
+        </div>
+      )}
+
+      {tab === "summary" && (
+        <div>
+          {hasSummary ? (
+            <SummaryView summary={note.summary} t={t} />
+          ) : genBusy ? (
+            <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.5, padding: "8px 0" }}>
+              Собираю конспект: разделы, таблицы, формулы…
+            </div>
+          ) : (
+            <div>
+              <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.5, marginBottom: 12, padding: "4px 0" }}>
+                Конспект ещё не собран. Модель разобьёт текст на разделы с определениями, формулами и таблицами.
+              </div>
+              <Button variant="dashed" onClick={makeSummary} disabled={genBusy}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Sparkles size={16} /> Сгенерировать конспект
+                </span>
+              </Button>
             </div>
           )}
-          {hasPlan ? <InteractivePlan plan={note.plan} t={t} /> : !retellingOnly && (
-            <div style={{ color: t.sub, fontSize: 14 }}>Плана пока нет.</div>
-          )}
-        </>
+        </div>
       )}
 
       {tab === "text" && note.text?.trim() && (

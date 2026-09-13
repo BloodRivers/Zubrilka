@@ -191,7 +191,7 @@ export async function getNote(id) {
   return snap.exists() ? { id, ...snap.data() } : null;
 }
 
-export async function createNote({ subject_id, title, text, plan, retelling, image_ref }) {
+export async function createNote({ subject_id, title, text, plan, retelling, summary, image_ref }) {
   if (!subject_id) throw new Error("Не указан предмет");
   if (!title?.trim()) throw new Error("Не указано название конспекта");
   if (!text?.trim()) throw new Error("Нет текста конспекта");
@@ -199,7 +199,9 @@ export async function createNote({ subject_id, title, text, plan, retelling, ima
   title = title.trim();
   text = text.trim();
 
-  if (!Array.isArray(plan) || !plan.length) {
+  if (plan === null) {
+    plan = [];
+  } else if (!Array.isArray(plan) || !plan.length) {
     const sections = text.split(/\n{2,}/).filter((s) => s.trim());
     plan = sections.slice(0, 5).map((s) => ({
       title: s.split("\n")[0].replace(/^[\s\d.▪•-]+/, "").trim().slice(0, 100) || "Раздел",
@@ -222,6 +224,7 @@ export async function createNote({ subject_id, title, text, plan, retelling, ima
       text,
       plan,
       retelling: retelling || "",
+      summary: summary || "",
       image_ref: image_ref || null,
       pinned: false,
       public: false,
@@ -249,8 +252,9 @@ export async function copyNoteToSubject(note, subjectId) {
     subject_id: subjectId,
     title: note.title || "Конспект",
     text: note.text || "",
-    plan: note.plan || [],
+    plan: Array.isArray(note.plan) && note.plan.length ? note.plan : null,
     retelling: note.retelling || "",
+    summary: note.summary || null,
     image_ref: note.image_ref || null,
   });
   return ref;
@@ -261,6 +265,17 @@ export async function updateNote(id, { title, pinned }) {
   if (title !== undefined) patch.title = title;
   if (pinned !== undefined) patch.pinned = pinned;
   return setDoc(doc(db, "notes", id), patch, { merge: true });
+}
+
+/** Сохранить сгенерированный конспект вкладки «Конспект». */
+export async function updateNoteSummary(id, summary) {
+  return setDoc(doc(db, "notes", id), { summary: normalizeSummaryForStore(summary) }, { merge: true });
+}
+
+function normalizeSummaryForStore(summary) {
+  if (Array.isArray(summary)) return summary;
+  if (typeof summary === "string" && summary.trim()) return [{ title: "Конспект", body: summary.trim() }];
+  return [];
 }
 
 export async function setNotePublic(id, isPublic, subjectName) {

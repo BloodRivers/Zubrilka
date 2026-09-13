@@ -382,7 +382,7 @@ export default function Settings({ isGuest }) {
           {balance.status === "loading" && <GhostInline width={64} />}
           {balance.status === "idle" && "Вставь ключ"}
           {balance.status === "ready" && `${Number(balance.amount).toFixed(2)} руб.`}
-          {balance.status === "error" && "Хз сколько"}
+          {balance.status === "error" && "Ошибка"}
         </span>
       </button>
       {balance.status === "error" && (

@@ -4,7 +4,6 @@ export const DEFAULT_MODEL = "google/gemini-3.5-flash-lite";
 
 export const MODEL_OPTIONS = [
   { v: "google/gemini-3.5-flash-lite", label: "Gemini 3.5 Flash Lite" },
-  { v: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash" },
 ];
 
 /** Максимум ИИ-запросов на человека в календарный день. */

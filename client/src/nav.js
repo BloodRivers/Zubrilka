@@ -35,7 +35,7 @@ export function consumeReturnTo() {
 }
 
 export function tabOf(pathname) {
-  if (pathname.startsWith("/library") || pathname.startsWith("/user")) return "/library";
+  if (pathname.startsWith("/library") || pathname.startsWith("/trainer") || pathname.startsWith("/ege") || pathname.startsWith("/user")) return "/library";
   if (pathname.startsWith("/settings")) return "/settings";
   if (pathname.startsWith("/account")) return "/account";
   if (
@@ -43,7 +43,6 @@ export function tabOf(pathname) {
     || pathname.startsWith("/subject")
     || pathname.startsWith("/note")
     || pathname.startsWith("/test")
-    || pathname.startsWith("/trainer")
     || pathname.startsWith("/results")
   )
     return "/";
@@ -54,6 +53,7 @@ function isHub(pathname) {
   return (
     pathname === "/"
     || /^\/subject\/[^/]+$/.test(pathname)
+    || /^\/ege\/[^/]+$/.test(pathname)
     || pathname === "/library"
     || pathname === "/settings"
     || pathname === "/account"
@@ -80,6 +80,7 @@ export function backOf(pathname, state) {
   if (noteQuiz) return `/note/${noteQuiz[1]}`;
 
   if (/^\/trainer\//.test(pathname)) return resumeTab("/library") ?? "/library";
+  if (/^\/ege\//.test(pathname)) return "/library";
 
   const sc = pathname.match(/^\/subject\/([^/]+)\//);
   if (sc) return `/subject/${sc[1]}`;

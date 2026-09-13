@@ -174,7 +174,8 @@ export default function NewNote() {
         subject_id: subjectId,
         title,
         text: parsed.text,
-        plan: parsed.plan,
+        plan: null,
+        summary: parsed.summary,
         retelling: parsed.retelling,
       });
       navigate(-1);

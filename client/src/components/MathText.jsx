@@ -3,7 +3,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 
 function katexHtml(tex, displayMode) {
-  return katex.renderToString(String(tex || ""), {
+  return katex.renderToString(String(tex || "").replace(/[«»“”‘’–—…]/g, " "), {
     displayMode,
     throwOnError: false,
     strict: false,
