@@ -8,6 +8,10 @@ export const THEMES = {
     sub: "#8C8C8C",
     inv: "#0A0A0A",
     invBg: "#FAFAFA",
+    success: "#46A758",
+    successTint: "rgba(70,167,88,0.14)",
+    danger: "#E5484D",
+    dangerTint: "rgba(229,72,77,0.10)",
   },
   light: {
     bg: "#FAFAFA",
@@ -18,6 +22,10 @@ export const THEMES = {
     sub: "#767676",
     inv: "#FAFAFA",
     invBg: "#0A0A0A",
+    success: "#46A758",
+    successTint: "rgba(70,167,88,0.14)",
+    danger: "#E5484D",
+    dangerTint: "rgba(229,72,77,0.10)",
   },
 };
 

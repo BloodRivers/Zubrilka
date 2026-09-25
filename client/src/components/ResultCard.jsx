@@ -1,6 +1,7 @@
-import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
+import useLongPress from "../hooks/useLongPress";
 
 /** Сравнение: лучший результат выше (доля, затем score, затем дата). */
 export function isBetterResult(a, b) {
@@ -27,49 +28,22 @@ export function bestResultsByTest(results) {
 export default function ResultCard({ result, idx, onLongPress }) {
   const { t } = useTheme();
   const navigate = useNavigate();
-  const timer = useRef(null);
-  const fired = useRef(false);
+  const long = useLongPress({
+    onClick: () => {
+      if (!result.test_id) return;
+      navigate(`/test/${result.test_id}/quiz/full`);
+    },
+    onLongPress: () => onLongPress(result),
+  });
   const weak = result.weak_topics || [];
   const extras = [];
   if (result.quizlet_total) extras.push(`квизлет ${result.quizlet_score ?? 0}/${result.quizlet_total}`);
   if (result.match_total) extras.push(`пары ${result.match_score ?? 0}/${result.match_total}`);
   if (result.written_grade != null) extras.push(`письм. ${result.written_grade}/5`);
 
-  const clear = () => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-  };
-
-  const handlePointerDown = () => {
-    if (!onLongPress) return;
-    fired.current = false;
-    clear();
-    timer.current = setTimeout(() => {
-      fired.current = true;
-      onLongPress(result);
-    }, 450);
-  };
-
-  const handleClick = (e) => {
-    if (fired.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      fired.current = false;
-      return;
-    }
-    if (!result.test_id) return;
-    navigate(`/test/${result.test_id}/quiz/full`);
-  };
-
   return (
     <div
-      onClick={handleClick}
-      onPointerDown={handlePointerDown}
-      onPointerUp={clear}
-      onPointerCancel={clear}
-      onContextMenu={(e) => fired.current && e.preventDefault()}
+      {...long}
       className="rowpress"
       style={{
         padding: "16px 18px",
@@ -80,7 +54,7 @@ export default function ResultCard({ result, idx, onLongPress }) {
         cursor: result.test_id ? "pointer" : "default",
         WebkitTouchCallout: "none",
         userSelect: "none",
-        animation: `fadeUp 460ms cubic-bezier(0.16,1,0.3,1) both`,
+        animation: `fadeUp 460ms ${EASE} both`,
         animationDelay: `${idx * 60}ms`,
       }}
     >

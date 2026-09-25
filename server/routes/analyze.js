@@ -1,4 +1,4 @@
-import { callPolza } from "../lib/polza.js";
+import { callPolza, parseModelJson } from "../lib/polza.js";
 import { logUsage } from "../middleware/auth.js";
 
 const SYSTEM = `Ты — помощник для учёбы. Получаешь фотографию конспекта тетради. `
@@ -13,30 +13,26 @@ const SYSTEM = `Ты — помощник для учёбы. Получаешь 
   + `в JSON только title и items (нумерацию I/1/a рисует UI).`;
 
 export function analyzeRoute() {
-  return async (req, res, next) => {
-    try {
-      const image = req.body?.image;
-      if (!image || typeof image !== "string" || !image.startsWith("data:image")) {
-        return res.status(400).json({ error: "Поле image (data URL изображения) обязательно" });
-      }
-
-      const { content, usage } = await callPolza({
-        system: SYSTEM,
-        messages: ["Распознай конспект и верни JSON."],
-        imageDataUrl: image,
-      });
-
-      await logUsage({ uid: req.user.uid, endpoint: "analyze-note", usage });
-
-      let parsed;
-      try {
-        parsed = JSON.parse(content.replace(/^```(json)?\s*|\s*```$/g, "").trim());
-      } catch {
-        return res.status(502).json({ error: "Модель вернула невалидный JSON", raw: content });
-      }
-      res.json({ ...parsed, usage });
-    } catch (e) {
-      next(e);
+  return async (req, res) => {
+    const image = req.body?.image;
+    if (!image || typeof image !== "string" || !image.startsWith("data:image")) {
+      return res.status(400).json({ error: "Поле image (data URL изображения) обязательно" });
     }
+
+    const { content, usage } = await callPolza({
+      system: SYSTEM,
+      messages: ["Распознай конспект и верни JSON."],
+      imageDataUrl: image,
+    });
+
+    await logUsage({ uid: req.user.uid, endpoint: "analyze-note", usage });
+
+    let parsed;
+    try {
+      parsed = parseModelJson(content);
+    } catch {
+      return res.status(502).json({ error: "Модель вернула невалидный JSON", raw: content });
+    }
+    res.json({ ...parsed, usage });
   };
 }

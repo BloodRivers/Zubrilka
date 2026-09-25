@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Modal from "./Modal";
 import { useTheme } from "../theme/ThemeContext";
 
 const AlertContext = createContext();
@@ -51,14 +52,6 @@ export function AlertProvider({ children }) {
 function AlertModal({ title, message, leaving, onClose, okLabel, onConfirm, confirmLabel, danger, shake }) {
   const { t } = useTheme();
 
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const btnBase = {
     flex: 1,
     padding: "13px 0",
@@ -73,86 +66,62 @@ function AlertModal({ title, message, leaving, onClose, okLabel, onConfirm, conf
   const twoCols = Boolean(onConfirm);
 
   return (
-    <div
-      onClick={() => onClose()}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 32px",
-        zIndex: 200,
-        animation: `${leaving ? "backdropOut" : "backdropIn"} 220ms ease-out forwards`,
-      }}
+    <Modal
+      open
+      onClose={onClose}
+      leaving={leaving}
+      maxWidth={300}
+      radius={20}
+      pad="26px 20px 20px 20px"
+      bodyAnim={shake && !leaving ? "shakeX 450ms cubic-bezier(0.36,0.07,0.19,0.97)" : undefined}
+      style={{ textAlign: "center" }}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 300,
-          background: t.surface,
-          borderRadius: 20,
-          padding: "26px 20px 20px 20px",
-          textAlign: "center",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-          animation: leaving
-            ? "modalOut 220ms cubic-bezier(0.16,1,0.3,1) forwards"
-            : shake
-              ? "shakeX 450ms cubic-bezier(0.36,0.07,0.19,0.97)"
-              : "modalIn 220ms cubic-bezier(0.16,1,0.3,1) forwards",
-        }}
-      >
-        <div style={{ color: t.text, fontSize: 17, fontWeight: 700 }}>{title}</div>
-        <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.45, marginTop: 8 }}>{message}</div>
-        {twoCols ? (
-          <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-            <button
-              className="press"
-              onClick={() => onClose()}
-              style={{
-                ...btnBase,
-                background: t.surface,
-                color: t.text,
-                border: `1px solid ${t.border}`,
-              }}
-            >
-              Отмена
-            </button>
-            <button
-              className="press"
-              onClick={() => {
-                onClose(true);
-                onConfirm();
-              }}
-              style={{
-                ...btnBase,
-                background: danger ? "#E5484D" : t.invBg,
-                color: danger ? "#fff" : t.inv,
-              }}
-            >
-              {confirmLabel}
-            </button>
-          </div>
-        ) : (
+      <div style={{ color: t.text, fontSize: 17, fontWeight: 700 }}>{title}</div>
+      <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.45, marginTop: 8 }}>{message}</div>
+      {twoCols ? (
+        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button
             className="press"
             onClick={() => onClose()}
             style={{
-              marginTop: 20,
-              width: "100%",
               ...btnBase,
-              background: t.invBg,
-              color: t.inv,
+              background: t.surface,
+              color: t.text,
+              border: `1px solid ${t.border}`,
             }}
           >
-            {okLabel}
+            Отмена
           </button>
-        )}
-      </div>
-    </div>
+          <button
+            className="press"
+            onClick={() => {
+              onClose(true);
+              onConfirm();
+            }}
+            style={{
+              ...btnBase,
+              background: danger ? t.danger : t.invBg,
+              color: danger ? "#fff" : t.inv,
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      ) : (
+        <button
+          className="press"
+          onClick={() => onClose()}
+          style={{
+            marginTop: 20,
+            width: "100%",
+            ...btnBase,
+            background: t.invBg,
+            color: t.inv,
+          }}
+        >
+          {okLabel}
+        </button>
+      )}
+    </Modal>
   );
 }

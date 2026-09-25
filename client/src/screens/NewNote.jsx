@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { Plus, Check, FileText, FileType } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { useAlert } from "../components/Alert";
 import Button from "../components/Button";
 import { createNote } from "../api/firestore";
@@ -467,7 +468,7 @@ export default function NewNote() {
             <div style={{ color: t.text, fontSize: 17, fontWeight: 600 }}>Распознаём конспект…</div>
             <div
               key={status || WORK_PHRASES[phraseIdx]}
-              style={{ color: status ? "#F5A623" : t.sub, fontSize: 13, lineHeight: 1.4, minHeight: 18, animation: "fadeUp 400ms cubic-bezier(0.16,1,0.3,1)" }}
+              style={{ color: status ? "#F5A623" : t.sub, fontSize: 13, lineHeight: 1.4, minHeight: 18, animation: `fadeUp 400ms ${EASE}` }}
             >
               {status || WORK_PHRASES[phraseIdx]}
             </div>

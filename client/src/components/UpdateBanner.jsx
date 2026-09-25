@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { RefreshCw } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { db } from "../firebase";
 import { applyAppUpdate, onAppUpdateAvailable } from "../swUpdate";
 import { onForegroundUpdateMessage } from "../api/push";
@@ -93,7 +94,7 @@ export default function UpdateBanner() {
         background: t.invBg,
         color: t.inv,
         boxShadow: "0 12px 32px rgba(0,0,0,0.28)",
-        animation: "fadeUp 320ms cubic-bezier(0.16,1,0.3,1) both",
+        animation: `fadeUp 320ms ${EASE} both`,
       }}
     >
       <RefreshCw size={18} style={{ flexShrink: 0 }} />

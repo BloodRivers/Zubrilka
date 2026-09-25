@@ -1,4 +1,5 @@
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 
 /**
  * @param {{ value?: number, segments?: number[] }} props
@@ -35,7 +36,7 @@ export default function ProgressBar({ value = 0, segments }) {
               width: `${Math.min(100, Math.max(0, Number(v) * 100))}%`,
               background: t.invBg,
               borderRadius: 999,
-              transition: "width 500ms cubic-bezier(0.16,1,0.3,1)",
+              transition: `width 500ms ${EASE}`,
             }}
           />
         </div>

@@ -6,11 +6,13 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { updateUserProfile } from "./api/firestore";
 import { ThemeProvider, useTheme } from "./theme/ThemeContext";
+import { EASE } from "./theme/theme";
 import { AlertProvider, useAlert } from "./components/Alert";
 import ErrorBoundary from "./components/ErrorBoundary";
 import TopBar from "./components/TopBar";
 import ScreenTransition from "./components/ScreenTransition";
 import BottomNav from "./components/BottomNav";
+import Modal from "./components/Modal";
 import { rememberTab, backOf, onScreenTitle, isQuizActive, setQuizActive } from "./nav";
 import { getApiKey, setApiKey, syncAiUsage } from "./api/ai";
 import { syncPushTokenIfGranted } from "./api/push";
@@ -58,7 +60,7 @@ function titleFor(path) {
   return s?.title || "ЕГЭ";
 }
   if (path === "/login") return "";
-  return "Забубрилка";
+  return "Зубрилка";
 }
 
 function ConsentModal({ onAccept, onDecline, readTerms, readPrivacy, readCookies }) {
@@ -102,89 +104,72 @@ function ConsentModal({ onAccept, onDecline, readTerms, readPrivacy, readCookies
       )}
     </button>
   );
-  return createPortal(
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 24px",
-        zIndex: 150,
-        animation: "backdropIn 220ms ease-out forwards",
-      }}
+  return (
+    <Modal
+      open
+      onClose={() => {}}
+      allowClose={() => false}
+      maxWidth={360}
+      radius={24}
+      pad="26px 22px 20px"
+      zIndex={150}
+      backdrop="rgba(0,0,0,0.5)"
+      backdropPad="0 24px"
     >
-      <div
+      <div style={{ color: t.text, fontSize: 21, fontWeight: 700 }}>Добро пожаловать</div>
+      <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.45, marginTop: 10 }}>
+        Чтобы согласиться, прочитай все документы до конца.
+      </div>
+      <div style={{ margin: "18px 0" }}>
+        {docItem("Условия использования", "/terms", readTerms)}
+        <div style={{ marginTop: 8 }}>{docItem("Политика конфиденциальности", "/privacy", readPrivacy)}</div>
+        <div style={{ marginTop: 8 }}>{docItem("Политика cookies", "/cookies", readCookies)}</div>
+      </div>
+      <button
+        className="press"
+        onClick={onAccept}
+        disabled={!allRead}
         style={{
           width: "100%",
-          maxWidth: 360,
-          background: t.surface,
-          borderRadius: 24,
-          padding: "26px 22px 20px",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-          animation: "modalIn 220ms cubic-bezier(0.16,1,0.3,1) forwards",
+          padding: "14px 0",
+          borderRadius: 999,
+          border: "none",
+          background: t.invBg,
+          color: t.inv,
+          fontSize: 15,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          cursor: allRead ? "pointer" : "default",
+          opacity: allRead ? 1 : 0.4,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
         }}
       >
-        <div style={{ color: t.text, fontSize: 21, fontWeight: 700 }}>Добро пожаловать</div>
-        <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.45, marginTop: 10 }}>
-          Чтобы согласиться, прочитай все документы до конца.
-        </div>
-        <div style={{ margin: "18px 0" }}>
-          {docItem("Условия использования", "/terms", readTerms)}
-          <div style={{ marginTop: 8 }}>{docItem("Политика конфиденциальности", "/privacy", readPrivacy)}</div>
-          <div style={{ marginTop: 8 }}>{docItem("Политика cookies", "/cookies", readCookies)}</div>
-        </div>
-        <button
-          className="press"
-          onClick={onAccept}
-          disabled={!allRead}
-          style={{
-            width: "100%",
-            padding: "14px 0",
-            borderRadius: 999,
-            border: "none",
-            background: t.invBg,
-            color: t.inv,
-            fontSize: 15,
-            fontWeight: 600,
-            fontFamily: "inherit",
-            cursor: allRead ? "pointer" : "default",
-            opacity: allRead ? 1 : 0.4,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-          }}
-        >
-          Принимаю
-          {allRead && <Check size={16} strokeWidth={3} />}
-        </button>
-        <button
-          className="press"
-          onClick={onDecline}
-          style={{
-            width: "100%",
-            marginTop: 6,
-            padding: "10px 0",
-            borderRadius: 999,
-            border: "none",
-            background: "transparent",
-            color: "#E5484D",
-            fontSize: 14,
-            fontWeight: 600,
-            fontFamily: "inherit",
-            cursor: "pointer",
-          }}
-        >
-          Отклонить и удалить аккаунт
-        </button>
-      </div>
-    </div>,
-    document.body
+        Принимаю
+        {allRead && <Check size={16} strokeWidth={3} />}
+      </button>
+      <button
+        className="press"
+        onClick={onDecline}
+        style={{
+          width: "100%",
+          marginTop: 6,
+          padding: "10px 0",
+          borderRadius: 999,
+          border: "none",
+          background: "transparent",
+          color: t.danger,
+          fontSize: 14,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          cursor: "pointer",
+        }}
+      >
+        Отклонить и удалить аккаунт
+      </button>
+    </Modal>
   );
 }
 
@@ -358,7 +343,7 @@ function Shell() {
   const [entered, setEntered] = useState(true);
 
   const stagger = (delay) => ({
-    animation: "fadeUp 500ms cubic-bezier(0.16,1,0.3,1) both",
+    animation: `fadeUp 500ms ${EASE} both`,
     animationDelay: `${delay}ms`,
   });
 
@@ -568,7 +553,7 @@ function Shell() {
     >
       <img
         src="/favicon.png"
-        alt="Забубрилка"
+        alt="Зубрилка"
         width={72}
         height={72}
         style={{
@@ -601,7 +586,7 @@ function Shell() {
     </div>
   );
 
-  if (!ready) return splash("Забубрилка", "Загружаем…");
+  if (!ready) return splash("Зубрилка", "Загружаем…");
   if (!user && location.pathname !== "/login") return <Navigate to="/login" replace />;
   if (user && location.pathname === "/login") return <Navigate to="/" replace />;
 
@@ -621,12 +606,12 @@ function Shell() {
         padding: "0 32px",
         textAlign: "center",
         pointerEvents: bootPhase === 1 ? "none" : "auto",
-        animation: bootPhase === 1 ? "fadeUpOut 380ms cubic-bezier(0.16,1,0.3,1) forwards" : undefined,
+        animation: bootPhase === 1 ? `fadeUpOut 380ms ${EASE} forwards` : undefined,
       }}
     >
       <img
         src="/favicon.png"
-        alt="Забубрилка"
+        alt="Зубрилка"
         width={72}
         height={72}
         style={{
@@ -636,7 +621,7 @@ function Shell() {
           objectFit: "cover",
           marginBottom: 20,
           display: "block",
-          animation: "fadeUp 500ms cubic-bezier(0.16,1,0.3,1) both",
+          animation: `fadeUp 500ms ${EASE} both`,
         }}
       />
       <div style={{ color: t.text, fontSize: 21, fontWeight: 700, letterSpacing: "-0.02em", ...stagger(70) }}>

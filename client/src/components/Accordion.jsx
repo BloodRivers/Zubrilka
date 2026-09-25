@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 
 export default function Accordion({ title, open, onToggle, children }) {
   const { t } = useTheme();
@@ -27,7 +28,7 @@ export default function Accordion({ title, open, onToggle, children }) {
           color={t.sub}
           style={{
             transform: open ? "rotate(90deg)" : "rotate(0deg)",
-            transition: "transform 300ms cubic-bezier(0.16,1,0.3,1)",
+            transition: `transform 300ms ${EASE}`,
           }}
         />
       </button>

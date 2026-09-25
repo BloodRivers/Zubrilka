@@ -1,4 +1,5 @@
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 
 /** Compact iOS-like switch with clear on/off contrast. */
 export default function Switch({ on, disabled }) {
@@ -34,7 +35,7 @@ export default function Switch({ on, disabled }) {
           borderRadius: 999,
           background: knob,
           boxShadow: "0 1px 3px rgba(0,0,0,0.28)",
-          transition: "left 180ms cubic-bezier(0.16,1,0.3,1), background 180ms ease",
+          transition: `left 180ms ${EASE}, background 180ms ease`,
         }}
       />
     </span>

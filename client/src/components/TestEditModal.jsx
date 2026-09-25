@@ -1,20 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "./Alert";
 import Button from "./Button";
+import Modal from "./Modal";
+import FieldLabel from "./FieldLabel";
 import Switch from "./Switch";
 import { setTestPublic, updateTest, getTest, deleteTest } from "../api/firestore";
 import { auth } from "../firebase";
-
-function FieldLabel({ children, t }) {
-  return (
-    <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", margin: "0 0 8px 2px" }}>
-      {children}
-    </div>
-  );
-}
 
 /**
  * Модалка теста: публикация в библиотеке и удаление.
@@ -24,15 +16,12 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
   const { t } = useTheme();
   const { alert } = useAlert();
   const [isPublic, setIsPublic] = useState(false);
-  const [leaving, setLeaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [label, setLabel] = useState(title || "Тест");
-  const timer = useRef(null);
 
   useEffect(() => {
     if (!open || !testId) return undefined;
-    setLeaving(false);
     setLabel(title || "Тест");
     let cancelled = false;
     (async () => {
@@ -48,26 +37,6 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
     })();
     return () => { cancelled = true; };
   }, [open, testId, title]);
-
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  const requestClose = () => {
-    if (leaving || busy) return;
-    setLeaving(true);
-    timer.current = setTimeout(() => {
-      setLeaving(false);
-      onClose();
-    }, 220);
-  };
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape") requestClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, leaving, busy]);
 
   const save = async () => {
     if (!canEdit || busy || !testId) return;
@@ -109,147 +78,95 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
     });
   };
 
-  if (!open && !leaving) return null;
+  const requestClose = () => onClose();
 
-  return createPortal(
-    <div
-      onClick={requestClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 32px",
-        zIndex: 200,
-        animation: `${leaving ? "backdropOut" : "backdropIn"} 220ms ease-out forwards`,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
+  return (
+    <Modal open={open} onClose={onClose} title="Редактировать тест" allowClose={() => !busy}>
+      <div style={{ color: t.sub, fontSize: 13, marginBottom: 16, lineHeight: 1.4 }}>
+        Дай тесту понятное название — так проще его найти среди других.
+      </div>
+
+      <FieldLabel t={t}>Название</FieldLabel>
+      <input
+        value={label}
+        disabled={!canEdit || busy}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="Название теста"
         style={{
           width: "100%",
-          maxWidth: 320,
-          background: t.surface,
-          borderRadius: 22,
-          padding: "22px 20px 20px 20px",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-          animation: `${leaving ? "modalOut" : "modalIn"} 220ms cubic-bezier(0.16,1,0.3,1) forwards`,
+          boxSizing: "border-box",
+          padding: "13px 16px",
+          borderRadius: 14,
+          border: `1px solid ${t.border}`,
+          background: t.raised,
+          color: t.text,
+          fontSize: 15,
+          fontFamily: "inherit",
+          outline: "none",
+          marginBottom: 16,
+          opacity: canEdit ? 1 : 0.6,
+        }}
+      />
+
+      <FieldLabel t={t}>Параметры</FieldLabel>
+      <button
+        type="button"
+        onClick={() => canEdit && setIsPublic((p) => !p)}
+        className="press"
+        disabled={!canEdit || busy}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          width: "100%",
+          marginBottom: 16,
+          padding: "14px 16px",
+          borderRadius: 14,
+          border: `1px solid ${t.border}`,
+          background: t.raised,
+          cursor: canEdit ? "pointer" : "default",
+          fontFamily: "inherit",
+          textAlign: "left",
+          opacity: canEdit ? 1 : 0.6,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ color: t.text, fontSize: 17, fontWeight: 700 }}>Редактировать тест</div>
-          <button
-            type="button"
-            className="press"
-            onClick={requestClose}
-            aria-label="Закрыть"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 999,
-              border: "none",
-              background: t.raised,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-            }}
-          >
-            <X size={15} color={t.sub} />
-          </button>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>В библиотеке</div>
+          <div style={{ color: t.sub, fontSize: 12, marginTop: 3, lineHeight: 1.35 }}>
+            Тест увидят все пользователи
+          </div>
         </div>
+        <Switch on={isPublic} disabled={!canEdit} />
+      </button>
 
-        <div style={{ color: t.sub, fontSize: 13, marginBottom: 16, lineHeight: 1.4 }}>
-          Дай тесту понятное название — так проще его найти среди других.
-        </div>
+      <Button type="button" variant="primary" onClick={save} disabled={!canEdit || busy}>
+        {busy ? "Сохраняю…" : "Сохранить"}
+      </Button>
 
-        <FieldLabel t={t}>Название</FieldLabel>
-        <input
-          value={label}
-          disabled={!canEdit || busy}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Название теста"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "13px 16px",
-            borderRadius: 14,
-            border: `1px solid ${t.border}`,
-            background: t.raised,
-            color: t.text,
-            fontSize: 15,
-            fontFamily: "inherit",
-            outline: "none",
-            marginBottom: 16,
-            opacity: canEdit ? 1 : 0.6,
-          }}
-        />
-
-        <FieldLabel t={t}>Параметры</FieldLabel>
+      {canEdit && (
         <button
           type="button"
-          onClick={() => canEdit && setIsPublic((p) => !p)}
           className="press"
-          disabled={!canEdit || busy}
+          onClick={confirmDelete}
+          disabled={busy}
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
+            marginTop: 10,
             width: "100%",
-            marginBottom: 16,
-            padding: "14px 16px",
-            borderRadius: 14,
-            border: `1px solid ${t.border}`,
-            background: t.raised,
-            cursor: canEdit ? "pointer" : "default",
+            padding: "16px",
+            borderRadius: 999,
+            border: "none",
+            background: "transparent",
+            color: t.danger,
+            fontSize: 14,
+            fontWeight: 600,
             fontFamily: "inherit",
-            textAlign: "left",
-            opacity: canEdit ? 1 : 0.6,
+            cursor: "pointer",
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>В библиотеке</div>
-            <div style={{ color: t.sub, fontSize: 12, marginTop: 3, lineHeight: 1.35 }}>
-              Тест увидят все пользователи
-            </div>
-          </div>
-          <Switch on={isPublic} disabled={!canEdit} />
+          Удалить тест
         </button>
-
-        <Button type="button" variant="primary" onClick={save} disabled={!canEdit || busy}>
-          {busy ? "Сохраняю…" : "Сохранить"}
-        </Button>
-
-        {canEdit && (
-          <button
-            type="button"
-            className="press"
-            onClick={confirmDelete}
-            disabled={busy}
-            style={{
-              marginTop: 10,
-              width: "100%",
-              padding: "16px",
-              borderRadius: 999,
-              border: "none",
-              background: "transparent",
-              color: "#E5484D",
-              fontSize: 14,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
-          >
-            Удалить тест
-          </button>
-        )}
-      </div>
-    </div>,
-    document.body
+      )}
+    </Modal>
   );
 }

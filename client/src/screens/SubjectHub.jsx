@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { Plus, Pin, X, FlaskConical } from "lucide-react";
+import { Plus, Pin, FlaskConical } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { useAlert } from "../components/Alert";
 import Button from "../components/Button";
+import Modal from "../components/Modal";
+import FieldLabel from "../components/FieldLabel";
+import useLongPress from "../hooks/useLongPress";
 import { GhostCards, useGhostHold } from "../components/Ghost";
 import { bestResultsByTest } from "../components/ResultCard";
 import Segmented from "../components/Segmented";
@@ -13,14 +16,6 @@ import { listNotes, getSubject, updateNote, deleteNote, listResults, setNotePubl
 import { testSizeLabel } from "../api/backend";
 import { setScreenTitle } from "../nav";
 import Switch from "../components/Switch";
-
-function FieldLabel({ children, t }) {
-  return (
-    <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", margin: "0 0 8px 2px" }}>
-      {children}
-    </div>
-  );
-}
 
 function ToggleRow({ label, hint, on, onToggle, t, style }) {
   return (
@@ -55,43 +50,11 @@ function ToggleRow({ label, hint, on, onToggle, t, style }) {
 
 function NoteCard({ note, idx, onClick, onLongPress }) {
   const { t } = useTheme();
-  const timer = useRef(null);
-  const fired = useRef(false);
-
-  const clear = () => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-  };
-
-  const handlePointerDown = () => {
-    if (!onLongPress) return;
-    fired.current = false;
-    clear();
-    timer.current = setTimeout(() => {
-      fired.current = true;
-      onLongPress();
-    }, 450);
-  };
-
-  const handleClick = (e) => {
-    if (fired.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      fired.current = false;
-      return;
-    }
-    onClick?.();
-  };
+  const long = useLongPress({ onClick, onLongPress });
 
   return (
     <div
-      onClick={handleClick}
-      onPointerDown={handlePointerDown}
-      onPointerUp={clear}
-      onPointerCancel={clear}
-      onContextMenu={(e) => fired.current && e.preventDefault()}
+      {...long}
       className="rowpress"
       style={{
         padding: "18px",
@@ -102,7 +65,7 @@ function NoteCard({ note, idx, onClick, onLongPress }) {
         cursor: "pointer",
         WebkitTouchCallout: "none",
         userSelect: "none",
-        animation: `fadeUp 460ms cubic-bezier(0.16,1,0.3,1) both`,
+        animation: `fadeUp 460ms ${EASE} both`,
         animationDelay: `${idx * 60}ms`,
       }}
     >
@@ -125,204 +88,121 @@ function NoteEditModal({ open, initial, onClose, onSave, onDelete }) {
   const [title, setTitle] = useState("");
   const [pinned, setPinned] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const timer = useRef(null);
 
   useEffect(() => {
     if (open) {
       setTitle(initial?.title ?? "");
       setPinned(!!initial?.pinned);
       setIsPublic(!!initial?.public);
-      setLeaving(false);
     }
   }, [open, initial]);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  const requestClose = () => {
-    if (leaving) return;
-    setLeaving(true);
-    timer.current = setTimeout(() => {
-      setLeaving(false);
-      onClose();
-    }, 220);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") requestClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
   const submit = async () => {
-    if (leaving) return;
     if (title.trim() === "") {
       alert("Введи название конспекта.");
       return;
     }
-    setLeaving(true);
     try {
       await onSave(initial, title.trim(), pinned, isPublic);
     } catch (err) {
       alert("Не удалось сохранить конспект: " + (err?.message ?? ""));
-    } finally {
-      setLeaving(false);
     }
   };
 
   const confirmDelete = () => {
-    if (!initial || leaving) return;
+    if (!initial) return;
     alert(`Удалить конспект «${title}»?`, {
       danger: true,
       confirmLabel: "Удалить",
       onConfirm: async () => {
-        setLeaving(true);
         try {
           await onDelete(initial.id);
-        } finally {
-          setLeaving(false);
+        } catch {
+          /* ошибка уже показана в onDelete */
         }
       },
     });
   };
 
-  if (!open && !leaving) return null;
-
-  return createPortal(
-    <div
-      onClick={requestClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 32px",
-        zIndex: 200,
-        animation: `${leaving ? "backdropOut" : "backdropIn"} 220ms ease-out forwards`,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 320,
-          background: t.surface,
-          borderRadius: 22,
-          padding: "22px 20px 20px 20px",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-          animation: `${leaving ? "modalOut" : "modalIn"} 220ms cubic-bezier(0.16,1,0.3,1) forwards`,
+  return (
+    <Modal open={open} onClose={onClose} title="Редактировать конспект">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ color: t.text, fontSize: 17, fontWeight: 700 }}>Редактировать конспект</div>
-          <button
-            type="button"
-            className="press"
-            onClick={requestClose}
-            aria-label="Закрыть"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 999,
-              border: "none",
-              background: t.raised,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-            }}
-          >
-            <X size={15} color={t.sub} />
-          </button>
-        </div>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <FieldLabel t={t}>Название</FieldLabel>
-          <input
-            autoFocus
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Как назвать конспект"
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "14px 16px",
-              borderRadius: 14,
-              border: `1px solid ${t.border}`,
-              background: t.raised,
-              color: t.text,
-              fontSize: 15,
-              fontFamily: "inherit",
-              outline: "none",
-              marginBottom: 16,
-            }}
-          />
-
-          <FieldLabel t={t}>Параметры</FieldLabel>
-          <ToggleRow
-            t={t}
-            label="Закрепить"
-            hint="Всегда сверху в списке конспектов"
-            on={pinned}
-            onToggle={() => setPinned((p) => !p)}
-            style={{ marginBottom: 8 }}
-          />
-          <ToggleRow
-            t={t}
-            label="В библиотеке"
-            hint="Конспект увидят все пользователи"
-            on={isPublic}
-            onToggle={() => setIsPublic((p) => !p)}
-            style={{ marginBottom: 16 }}
-          />
-
-          <Button type="submit" variant="primary" disabled={title.trim() === "" || leaving}>
-            Сохранить
-          </Button>
-        </form>
-
-        <button
-          type="button"
-          className="press"
-          onClick={confirmDelete}
+        <FieldLabel t={t}>Название</FieldLabel>
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Как назвать конспект"
           style={{
-            marginTop: 10,
             width: "100%",
-            padding: "16px",
-            borderRadius: 999,
-            border: "none",
-            background: "transparent",
-            color: "#E5484D",
-            fontSize: 14,
-            fontWeight: 600,
+            boxSizing: "border-box",
+            padding: "14px 16px",
+            borderRadius: 14,
+            border: `1px solid ${t.border}`,
+            background: t.raised,
+            color: t.text,
+            fontSize: 15,
             fontFamily: "inherit",
-            cursor: "pointer",
+            outline: "none",
+            marginBottom: 16,
           }}
-        >
-          Удалить конспект
-        </button>
-      </div>
-    </div>,
-    document.body
+        />
+
+        <FieldLabel t={t}>Параметры</FieldLabel>
+        <ToggleRow
+          t={t}
+          label="Закрепить"
+          hint="Всегда сверху в списке конспектов"
+          on={pinned}
+          onToggle={() => setPinned((p) => !p)}
+          style={{ marginBottom: 8 }}
+        />
+        <ToggleRow
+          t={t}
+          label="В библиотеке"
+          hint="Конспект увидят все пользователи"
+          on={isPublic}
+          onToggle={() => setIsPublic((p) => !p)}
+          style={{ marginBottom: 16 }}
+        />
+
+        <Button type="submit" variant="primary" disabled={title.trim() === ""}>
+          Сохранить
+        </Button>
+      </form>
+
+      <button
+        type="button"
+        className="press"
+        onClick={confirmDelete}
+        style={{
+          marginTop: 10,
+          width: "100%",
+          padding: "16px",
+          borderRadius: 999,
+          border: "none",
+          background: "transparent",
+          color: t.danger,
+          fontSize: 14,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          cursor: "pointer",
+        }}
+      >
+        Удалить конспект
+      </button>
+    </Modal>
   );
 }
 
 export default function SubjectHub() {
   const { subjectId } = useParams();
   const navigate = useNavigate();
-  const { t } = useTheme();
   const { alert } = useAlert();
   const [notes, setNotes] = useState([]);
   const [tests, setTests] = useState([]);
@@ -496,116 +376,38 @@ export default function SubjectHub() {
 
 function PickNoteModal({ open, notes, onClose, onPick }) {
   const { t } = useTheme();
-  const [leaving, setLeaving] = useState(false);
-  const timer = useRef(null);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  const requestClose = () => {
-    if (leaving) return;
-    setLeaving(true);
-    timer.current = setTimeout(() => {
-      setLeaving(false);
-      onClose();
-    }, 220);
-  };
-
-  useEffect(() => {
-    if (!open) return undefined;
-    setLeaving(false);
-    const onKey = (e) => {
-      if (e.key === "Escape") requestClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  if (!open && !leaving) return null;
-
-  return createPortal(
-    <div
-      onClick={requestClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 28px",
-        zIndex: 200,
-        animation: `${leaving ? "backdropOut" : "backdropIn"} 220ms ease-out forwards`,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 340,
-          maxHeight: "70dvh",
-          overflow: "auto",
-          background: t.surface,
-          borderRadius: 22,
-          padding: "20px 18px 16px",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-          animation: `${leaving ? "modalOut" : "modalIn"} 220ms cubic-bezier(0.16,1,0.3,1) forwards`,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={{ color: t.text, fontSize: 17, fontWeight: 700 }}>Конспект для теста</div>
-          <button
-            type="button"
-            className="press"
-            onClick={requestClose}
-            aria-label="Закрыть"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 999,
-              border: "none",
-              background: t.raised,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-            }}
-          >
-            <X size={15} color={t.sub} />
-          </button>
-        </div>
-        <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.4, marginBottom: 14 }}>
-          Выбери конспект — потом типы заданий и генерация.
-        </div>
-        {notes.map((n) => (
-          <button
-            key={n.id}
-            type="button"
-            className="rowpress"
-            onClick={() => onPick(n)}
-            style={{
-              width: "100%",
-              display: "block",
-              textAlign: "left",
-              padding: "14px 16px",
-              marginBottom: 8,
-              borderRadius: 14,
-              border: `1px solid ${t.border}`,
-              background: t.raised,
-              color: t.text,
-              fontSize: 15,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
-          >
-            {n.title || "Конспект"}
-          </button>
-        ))}
+  return (
+    <Modal open={open} onClose={onClose} title="Конспект для теста" maxWidth={340} maxHeight="70dvh" pad="20px 18px 16px">
+      <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.4, marginBottom: 14 }}>
+        Выбери конспект — потом типы заданий и генерация.
       </div>
-    </div>,
-    document.body
+      {notes.map((n) => (
+        <button
+          key={n.id}
+          type="button"
+          className="rowpress"
+          onClick={() => onPick(n)}
+          style={{
+            width: "100%",
+            display: "block",
+            textAlign: "left",
+            padding: "14px 16px",
+            marginBottom: 8,
+            borderRadius: 14,
+            border: `1px solid ${t.border}`,
+            background: t.raised,
+            color: t.text,
+            fontSize: 15,
+            fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: "pointer",
+          }}
+        >
+          {n.title || "Конспект"}
+        </button>
+      ))}
+    </Modal>
   );
 }
 
@@ -636,35 +438,10 @@ function EmptyState({ icon, title, sub }) {
 function SavedTestCard({ test, best, idx, onLongPress }) {
   const { t } = useTheme();
   const navigate = useNavigate();
-  const timer = useRef(null);
-  const fired = useRef(false);
-
-  const clear = () => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-  };
-
-  useEffect(() => () => clear(), []);
-
-  const onPointerDown = () => {
-    fired.current = false;
-    clear();
-    timer.current = setTimeout(() => {
-      fired.current = true;
-      onLongPress?.();
-    }, 450);
-  };
-
-  const onClick = (event) => {
-    clear();
-    if (fired.current) {
-      event.preventDefault();
-      return;
-    }
-    navigate(`/test/${test.id}/quiz/run`);
-  };
+  const long = useLongPress({
+    onClick: () => navigate(`/test/${test.id}/quiz/run`),
+    onLongPress,
+  });
 
   const modes = Array.isArray(test.modes) ? test.modes : [];
   const sizeLabel = testSizeLabel(test);
@@ -680,10 +457,7 @@ function SavedTestCard({ test, best, idx, onLongPress }) {
     <button
       type="button"
       className="rowpress"
-      onPointerDown={onPointerDown}
-      onPointerUp={clear}
-      onPointerCancel={clear}
-      onClick={onClick}
+      {...long}
       style={{
         width: "100%",
         display: "block",

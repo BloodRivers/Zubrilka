@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FileText, FlaskConical } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { plural } from "../utils";
 import Avatar from "../components/Avatar";
 import { Bone, useGhostHold } from "../components/Ghost";
 import {
@@ -75,7 +76,7 @@ export default function UserProfile() {
             {displayName}
           </div>
           <div style={{ color: t.sub, fontSize: 13, marginTop: 4 }}>
-            {notes.length} конспект{plural(notes.length)} · {tests.length} тест{pluralTest(tests.length)} в библиотеке
+            {notes.length} {plural(notes.length, ["конспект", "конспекта", "конспектов"])} · {tests.length} {plural(tests.length, ["тест", "теста", "тестов"])} в библиотеке
           </div>
         </div>
       </div>
@@ -123,24 +124,6 @@ export default function UserProfile() {
       )}
     </div>
   );
-}
-
-function plural(n) {
-  const s = n % 100;
-  if (s >= 11 && s <= 14) return "ов";
-  const d = s % 10;
-  if (d === 1) return "";
-  if (d >= 2 && d <= 4) return "а";
-  return "ов";
-}
-
-function pluralTest(n) {
-  const s = n % 100;
-  if (s >= 11 && s <= 14) return "ов";
-  const d = s % 10;
-  if (d === 1) return "";
-  if (d >= 2 && d <= 4) return "а";
-  return "ов";
 }
 
 function SectionTitle({ t, children }) {

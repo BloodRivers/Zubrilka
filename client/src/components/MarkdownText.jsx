@@ -1,17 +1,5 @@
 import { Fragment, useMemo } from "react";
-import katex from "katex";
-import "katex/dist/katex.min.css";
-
-const NON_MATH = /[«»“”‘’–—…]/g;
-
-function katexHtml(tex, displayMode) {
-  return katex.renderToString(String(tex || "").replace(NON_MATH, " "), {
-    displayMode,
-    throwOnError: false,
-    strict: false,
-    output: "html",
-  });
-}
+import { katexHtml } from "../utils";
 
 function parseInline(src) {
   const s = String(src || "");

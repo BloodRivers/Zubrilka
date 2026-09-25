@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -20,9 +19,13 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { useAlert } from "../components/Alert";
+import { plural } from "../utils";
 import ListRow from "../components/ListRow";
 import Button from "../components/Button";
+import Modal from "../components/Modal";
+import FieldLabel from "../components/FieldLabel";
 import Accordion from "../components/Accordion";
 import { GhostList, useGhostHold } from "../components/Ghost";
 import { auth } from "../firebase";
@@ -271,8 +274,8 @@ function PickerWheel({ value, onSelect, items, getValue = (x) => x, renderItem, 
               userSelect: "none",
               transform: isActive ? "scale(1.05)" : "scale(0.92)",
               transition: snapping
-                ? "left 240ms cubic-bezier(0.16,1,0.3,1), transform 220ms cubic-bezier(0.16,1,0.3,1)"
-                : "transform 220ms cubic-bezier(0.16,1,0.3,1)",
+                ? `left 240ms ${EASE}, transform 220ms ${EASE}`
+                : `transform 220ms ${EASE}`,
             }}
           >
             {renderItem(item, isActive)}
@@ -283,15 +286,6 @@ function PickerWheel({ value, onSelect, items, getValue = (x) => x, renderItem, 
   );
 }
 
-function plural(n) {
-  const s = n % 100;
-  if (s >= 11 && s <= 14) return "конспектов";
-  const d = s % 10;
-  if (d === 1) return "конспект";
-  if (d >= 2 && d <= 4) return "конспекта";
-  return "конспектов";
-}
-
 function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
   const { t } = useTheme();
   const { alert } = useAlert();
@@ -299,8 +293,6 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
   const [custom, setCustom] = useState(false);
   const [icon, setIcon] = useState("Book");
   const [color, setColor] = useState(null);
-  const [leaving, setLeaving] = useState(false);
-  const timer = useRef(null);
 
   useEffect(() => {
     if (open) {
@@ -308,127 +300,45 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
       setCustom(Boolean(initial) && !PREMADE_SUBJECTS.includes(initial.name));
       setIcon(initial?.icon ?? "Book");
       setColor(initial?.color ?? null);
-      setLeaving(false);
     }
   }, [open, initial]);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  const requestClose = () => {
-    if (leaving) return;
-    setLeaving(true);
-    timer.current = setTimeout(() => {
-      setLeaving(false);
-      onClose();
-    }, 220);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") requestClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
   const submit = async () => {
-    if (leaving) return;
     if (name.trim() === "") {
       alert("Введи название предмета.");
       return;
     }
-    setLeaving(true);
     try {
       await onSave(initial, name.trim(), icon, color);
     } catch (err) {
       alert("Не удалось сохранить предмет: " + (err?.message ?? ""));
-    } finally {
-      setLeaving(false);
     }
   };
 
   const confirmDelete = () => {
-    if (!initial || leaving) return;
+    if (!initial) return;
     alert(`Удалить предмет «${name}»?`, {
       danger: true,
       confirmLabel: "Удалить",
       onConfirm: async () => {
-        setLeaving(true);
         try {
           await onDelete(initial.id);
-        } finally {
-          setLeaving(false);
+        } catch {
+          /* ошибка уже показана в onDelete */
         }
       },
     });
   };
 
-  if (!open && !leaving) return null;
-
-  return createPortal(
-    <div
-      onClick={requestClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 32px",
-        zIndex: 200,
-        animation: `${leaving ? "backdropOut" : "backdropIn"} 220ms ease-out forwards`,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 320,
-          background: t.surface,
-          borderRadius: 22,
-          padding: "22px 20px 20px 20px",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-          animation: `${leaving ? "modalOut" : "modalIn"} 220ms cubic-bezier(0.16,1,0.3,1) forwards`,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ color: t.text, fontSize: 17, fontWeight: 700 }}>
-            {initial ? "Редактировать предмет" : "Новый предмет"}
-          </div>
-          <button
-            type="button"
-            className="press"
-            onClick={requestClose}
-            aria-label="Закрыть"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 999,
-              border: "none",
-              background: t.raised,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-            }}
-          >
-            <X size={15} color={t.sub} />
-          </button>
-        </div>
-
-        <form
+  return (
+    <Modal open={open} onClose={onClose} title={initial ? "Редактировать предмет" : "Новый предмет"}>
+      <form
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
         >
-          <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px 2px" }}>
-            Название
-          </div>
+          <FieldLabel t={t}>Название</FieldLabel>
           {!custom ? (
             <>
               <PickerWheel
@@ -505,9 +415,7 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
             />
           )}
 
-          <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 8px 2px" }}>
-            Цвет
-          </div>
+          <FieldLabel t={t}>Цвет</FieldLabel>
           <PickerWheel
             value={color}
             items={SUBJECT_COLORS}
@@ -532,9 +440,7 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
             )}
           />
 
-          <div style={{ color: t.sub, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", margin: "18px 0 8px 2px" }}>
-            Иконка
-          </div>
+          <FieldLabel t={t} style={{ margin: "18px 0 8px 2px" }}>Иконка</FieldLabel>
           <PickerWheel
             value={icon}
             items={ICON_KEYS}
@@ -563,7 +469,7 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
           <Button
             type="submit"
             variant="primary"
-            disabled={name.trim() === "" || leaving}
+            disabled={name.trim() === ""}
             style={{ marginTop: 16 }}
           >
             {initial ? "Сохранить" : "Создать"}
@@ -581,7 +487,7 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
               padding: "16px",
               borderRadius: 999,
               border: "none",
-              background: "#E5484D",
+              background: t.danger,
               color: "#fff",
               fontSize: 15,
               fontWeight: 600,
@@ -592,9 +498,7 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
             Удалить предмет
           </button>
         )}
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 }
 
@@ -749,7 +653,7 @@ export default function Subjects() {
               idx={idx}
               icon={<C size={20} color={iconColor} strokeWidth={2} />}
               title={s.name}
-              sub={`${s.count} ${plural(s.count)}`}
+              sub={`${s.count} ${plural(s.count, ["конспект", "конспекта", "конспектов"])}`}
               onClick={() => navigate(`/subject/${s.id}`)}
               onLongPress={() => openEdit(s)}
               iconWrap={tint ? { background: tint } : undefined}

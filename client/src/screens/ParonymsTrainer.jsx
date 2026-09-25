@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
+import { shuffle } from "../utils";
 import ProgressBar from "../components/ProgressBar";
+import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import { Stat, TRAINER_LIST } from "./StressTrainer";
 import { sfx } from "../sfx";
@@ -14,15 +16,6 @@ const PARONYM_ITEMS = PARONYMS.map((x) => ({
   options: x.options.map((o) => o.toLowerCase()),
 }));
 const TOTAL = PARONYM_ITEMS.length;
-
-function shuffle(arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 export default function ParonymsTrainer() {
   const { t } = useTheme();
@@ -110,10 +103,10 @@ export default function ParonymsTrainer() {
   const optionStyle = (opt) => {
     const isAnswer = current.answer === opt;
     if (verdict && isAnswer) {
-      return { border: "#46A758", background: "rgba(70,167,88,0.14)", color: "#46A758" };
+      return { border: t.success, background: t.successTint, color: t.success };
     }
     if (verdict && verdict.pickedOpt === opt) {
-      return { border: "#E5484D", background: "rgba(229,72,77,0.10)", color: "#E5484D" };
+      return { border: t.danger, background: t.dangerTint, color: t.danger };
     }
     return { border: t.border, background: t.raised, color: t.text };
   };
@@ -123,64 +116,25 @@ export default function ParonymsTrainer() {
   return (
     <div style={{ paddingTop: 4 }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <Stat label="Серия" value={streak} tint="#46A758" />
+        <Stat label="Серия" value={streak} tint={t.success} />
         <Stat label="Осталось" value={remaining} />
-        <Stat label="Ошибки" value={mistakes} tint="#E5484D" />
+        <Stat label="Ошибки" value={mistakes} tint={t.danger} />
       </div>
       <ProgressBar value={progress} />
 
       {done ? (
-        <div style={{ paddingTop: 12 }}>
-          <div style={{ color: t.sub, fontSize: 13, marginBottom: 6 }}>Итог тренажёра</div>
-          {mistakes === 0 ? (
-            <div style={{ color: "#46A758", fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Без ошибок — отлично!</div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-              <div style={{ color: t.text, fontSize: 40, fontWeight: 700, letterSpacing: "-0.03em" }}>
-                {mastered}/{TOTAL}
-              </div>
-              <div style={{ color: t.sub, fontSize: 15 }}>слов освоено</div>
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-            <Stat label="Ошибки" value={mistakes} tint="#E5484D" />
-            <Stat label="Освоено слов" value={mastered} tint="#46A758" />
-          </div>
-
-          {Object.keys(errorRef.current).length > 0 ? (
-            <>
-              <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Стоит повторить</div>
-              {Object.entries(errorRef.current).map(([word, n]) => (
-                <div
-                  key={word}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "14px 0",
-                    borderBottom: `1px solid ${t.border}`,
-                  }}
-                >
-                  <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>{word}</div>
-                  <div style={{ fontSize: 12, color: t.sub, border: `1px solid ${t.border}`, padding: "5px 10px", borderRadius: 999 }}>
-                    {n} ошиб.
-                  </div>
-                </div>
-              ))}
-            </>
-          ) : (
-            <div style={{ color: t.sub, fontSize: 14, padding: "10px 0" }}>Все паронимы усвоены уверенно.</div>
-          )}
-
-          <div style={{ marginTop: 30, display: "flex", flexDirection: "column", gap: 10 }}>
-            {trainer?.egeSubject && (
-              <Button variant="dashed" onClick={() => navigate(`/ege/${trainer.egeSubject}`)}>
-                Вернуться к ЕГЭ
-              </Button>
-            )}
-            <Button onClick={start}>Ещё раз</Button>
-          </div>
-        </div>
+        <TrainerDone
+          mistakes={mistakes}
+          total={`${mastered}/${TOTAL}`}
+          secondLabel="Освоено слов"
+          secondValue={mastered}
+          scoreLabel="слов освоено"
+          wrongItems={Object.entries(errorRef.current).map(([word, n]) => ({ key: word, label: word, badge: `${n} ошиб.` }))}
+          emptyMsg="Все паронимы усвоены уверенно."
+          onRetry={start}
+          onBack={trainer?.egeSubject ? () => navigate(`/ege/${trainer.egeSubject}`) : null}
+          backLabel="Вернуться к ЕГЭ"
+        />
       ) : (
         <div style={{ padding: "32px 20px", borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, textAlign: "center" }}>
           {!verdict && (
@@ -226,7 +180,7 @@ export default function ParonymsTrainer() {
             <div className="swap">
               <div
                 style={{
-                  color: verdict.correct ? "#46A758" : "#E5484D",
+                  color: verdict.correct ? t.success : t.danger,
                   fontSize: 15,
                   fontWeight: 700,
                   marginTop: 14,

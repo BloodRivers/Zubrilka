@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { GhostLibrary, useGhostHold } from "../components/Ghost";
 import Segmented from "../components/Segmented";
 import Avatar from "../components/Avatar";
@@ -296,7 +297,7 @@ export default function Library() {
               cursor: "pointer",
               textAlign: "left",
               overflow: "hidden",
-              animation: `fadeUp 460ms cubic-bezier(0.16,1,0.3,1) both`,
+              animation: `fadeUp 460ms ${EASE} both`,
               animationDelay: `${i * 60}ms`,
             }}
           >

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { Bell, ChevronRight, ChevronDown, Check, KeyRound, Heart, RefreshCw, Lock } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { auth } from "../firebase";
 import { MODEL_OPTIONS, getApiKey, setApiKey, getBalance, getModel, setModel, onApiKeyChange, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import { updateUserProfile, getUserProfile } from "../api/firestore";
@@ -213,7 +214,7 @@ export default function Settings({ isGuest }) {
                 borderRadius: 16,
                 padding: 6,
                 boxShadow: theme === "dark" ? "0 16px 40px rgba(0,0,0,0.6)" : "0 16px 40px rgba(0,0,0,0.15)",
-                animation: "modalIn 160ms cubic-bezier(0.16,1,0.3,1)",
+                animation: `modalIn 160ms ${EASE}`,
               }}
             >
               {themeOpts.map((o) => {
@@ -378,7 +379,7 @@ export default function Settings({ isGuest }) {
         }}
       >
         <span style={{ color: t.text, fontSize: 15 }}>Баланс</span>
-        <span style={{ color: balance.status === "error" ? "#E5484D" : t.text, fontSize: 14, fontWeight: 600 }}>
+        <span style={{ color: balance.status === "error" ? t.danger : t.text, fontSize: 14, fontWeight: 600 }}>
           {balance.status === "loading" && <GhostInline width={64} />}
           {balance.status === "idle" && "Вставь ключ"}
           {balance.status === "ready" && `${Number(balance.amount).toFixed(2)} руб.`}
@@ -386,7 +387,7 @@ export default function Settings({ isGuest }) {
         </span>
       </button>
       {balance.status === "error" && (
-        <div style={{ color: "#E5484D", fontSize: 12, margin: "-2px 4px 8px" }}>{balance.error}</div>
+        <div style={{ color: t.danger, fontSize: 12, margin: "-2px 4px 8px" }}>{balance.error}</div>
       )}
 
       <div
@@ -415,7 +416,7 @@ export default function Settings({ isGuest }) {
                 borderRadius: 16,
                 padding: 6,
                 boxShadow: theme === "dark" ? "0 16px 40px rgba(0,0,0,0.6)" : "0 16px 40px rgba(0,0,0,0.15)",
-                animation: "modalIn 160ms cubic-bezier(0.16,1,0.3,1)",
+                animation: `modalIn 160ms ${EASE}`,
               }}
             >
               {MODEL_OPTIONS.map((o) => {

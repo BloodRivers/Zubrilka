@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 
 export default function Segmented({ options, value, onChange, style, labelStyle }) {
   const { t } = useTheme();
@@ -41,7 +42,7 @@ export default function Segmented({ options, value, onChange, style, labelStyle 
           background: t.invBg,
           boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
           transform: `translateX(${idx * cellW}px)`,
-          transition: "transform 280ms cubic-bezier(0.16,1,0.3,1)",
+          transition: `transform 280ms ${EASE}`,
         }}
       />
       {options.map(({ v, label, icon: Icon, badge }) => {

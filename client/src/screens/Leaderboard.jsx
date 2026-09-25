@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import Loader from "../components/Loader";
 import Avatar from "../components/Avatar";
 import { listAllUsers, listAllResults } from "../api/firestore";
@@ -73,7 +74,7 @@ export default function Leaderboard() {
               borderRadius: 18,
               background: mine ? t.invBg : t.surface,
               border: `1px solid ${mine ? "transparent" : t.border}`,
-              animation: `fadeUp 460ms cubic-bezier(0.16,1,0.3,1) both`,
+              animation: `fadeUp 460ms ${EASE} both`,
               animationDelay: `${i * 60}ms`,
             }}
           >

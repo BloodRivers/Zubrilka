@@ -1,47 +1,16 @@
-import { useRef } from "react";
 import { ChevronRight } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
+import useLongPress from "../hooks/useLongPress";
 
 export default function ListRow({ icon, title, sub, onClick, onLongPress, right, idx = 0, borderless, iconWrap }) {
   const { t } = useTheme();
-  const timer = useRef(null);
-  const fired = useRef(false);
-
-  const clear = () => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-  };
-
-  const handlePointerDown = () => {
-    if (!onLongPress) return;
-    fired.current = false;
-    clear();
-    timer.current = setTimeout(() => {
-      fired.current = true;
-      onLongPress();
-    }, 450);
-  };
-
-  const handleClick = (e) => {
-    if (fired.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      fired.current = false;
-      return;
-    }
-    onClick?.();
-  };
+  const long = useLongPress({ onClick, onLongPress });
 
   return (
     <button
       className="rowpress"
-      onClick={handleClick}
-      onPointerDown={handlePointerDown}
-      onPointerUp={clear}
-      onPointerCancel={clear}
-      onContextMenu={(e) => fired.current && e.preventDefault()}
+      {...long}
       style={{
         width: "100%",
         display: "flex",
@@ -56,7 +25,7 @@ export default function ListRow({ icon, title, sub, onClick, onLongPress, right,
         fontFamily: "inherit",
         WebkitTouchCallout: "none",
         userSelect: "none",
-        animation: `fadeUp 500ms cubic-bezier(0.16,1,0.3,1) both`,
+        animation: `fadeUp 500ms ${EASE} both`,
         animationDelay: `${idx * 60}ms`,
       }}
     >

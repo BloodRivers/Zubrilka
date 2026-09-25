@@ -2,6 +2,14 @@ const POLZA_BASE = process.env.POLZA_BASE_URL || "https://api.polza.ai";
 const POLZA_KEY = process.env.POLZA_API_KEY;
 const POLZA_MODEL = process.env.POLZA_MODEL || "anthropic/claude-sonnet-4.5";
 
+export function parseModelJson(content) {
+  return JSON.parse(
+    String(content || "")
+      .replace(/^```(json)?\s*|\s*```$/g, "")
+      .trim(),
+  );
+}
+
 export async function callPolza({ system, messages, imageDataUrl, maxTokens = 2000 }) {
   if (!POLZA_KEY) throw new Error("POLZA_API_KEY not set");
 

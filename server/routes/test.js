@@ -1,4 +1,4 @@
-import { callPolza } from "../lib/polza.js";
+import { callPolza, parseModelJson } from "../lib/polza.js";
 import { logUsage, fbdb } from "../middleware/auth.js";
 
 async function loadNotes(uid, ids) {
@@ -22,34 +22,29 @@ const SYSTEM = `Ты генерируешь материалы для повто
   + `Не копируй фразы конспекта, не делай «Вспомни пункт».`;
 
 export function testRoute() {
-  return async (req, res, next) => {
-    try {
-      const { note_ids, type, modes } = req.body || {};
-      const selected = Array.isArray(modes) && modes.length
-        ? modes
-        : type === "quizlet"
-          ? ["quizlet"]
-          : ["single"];
+  return async (req, res) => {
+    const { note_ids, type, modes } = req.body || {};
+    const selected = Array.isArray(modes) && modes.length
+      ? modes
+      : type === "quizlet"
+        ? ["quizlet"]
+        : ["single"];
 
-      let text;
-      if (note_ids && note_ids.length) {
-        const notes = await loadNotes(req.user.uid, note_ids);
-        text = notes.map((n) => n.text || JSON.stringify(n.topics || [])).join("\n\n");
-      } else if (req.body.text) {
-        text = req.body.text;
-      }
-      if (!text) return res.status(400).json({ error: "Укажите note_ids или text" });
-
-      const { content, usage } = await callPolza({
-        system: SYSTEM,
-        messages: [{ role: "user", content: `Режимы: ${selected.join(", ")}.\n\nКонспект:\n${text.slice(0, 12000)}` }],
-      });
-
-      await logUsage({ uid: req.user.uid, endpoint: "generate-test", usage });
-      const parsed = JSON.parse(content.replace(/^```(json)?\s*|\s*```$/g, "").trim());
-      res.json({ ...parsed, modes: selected, type: "mixed", usage });
-    } catch (e) {
-      next(e);
+    let text;
+    if (note_ids && note_ids.length) {
+      const notes = await loadNotes(req.user.uid, note_ids);
+      text = notes.map((n) => n.text || JSON.stringify(n.topics || [])).join("\n\n");
+    } else if (req.body.text) {
+      text = req.body.text;
     }
+    if (!text) return res.status(400).json({ error: "Укажите note_ids или text" });
+
+    const { content, usage } = await callPolza({
+      system: SYSTEM,
+      messages: [{ role: "user", content: `Режимы: ${selected.join(", ")}.\n\nКонспект:\n${text.slice(0, 12000)}` }],
+    });
+
+    await logUsage({ uid: req.user.uid, endpoint: "generate-test", usage });
+    res.json({ ...parseModelJson(content), modes: selected, type: "mixed", usage });
   };
 }

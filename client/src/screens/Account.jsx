@@ -299,7 +299,7 @@ export default function Account() {
           width: "100%",
           marginTop: 8,
           ...row(t),
-          color: "#E5484D",
+          color: t.danger,
           fontSize: 15,
           fontFamily: "inherit",
           cursor: "pointer",

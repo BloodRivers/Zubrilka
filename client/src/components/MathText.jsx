@@ -1,15 +1,5 @@
 import { useMemo } from "react";
-import katex from "katex";
-import "katex/dist/katex.min.css";
-
-function katexHtml(tex, displayMode) {
-  return katex.renderToString(String(tex || "").replace(/[«»“”‘’–—…]/g, " "), {
-    displayMode,
-    throwOnError: false,
-    strict: false,
-    output: "html",
-  });
-}
+import { katexHtml } from "../utils";
 
 export function splitMath(text) {
   const nodes = [];

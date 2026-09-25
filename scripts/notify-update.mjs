@@ -77,20 +77,20 @@ for (const batch of chunk(tokens, 400)) {
   const res = await messaging.sendEachForMulticast({
     tokens: batch,
     notification: {
-      title: "Забубрилка",
+      title: "Зубрилка",
       body: messageText,
       image: ICON,
     },
     data: {
       type: "app_update",
       version,
-      title: "Забубрилка",
+      title: "Зубрилка",
       body: messageText,
     },
     webpush: {
       fcmOptions: { link: HOST + "/" },
       notification: {
-        title: "Забубрилка",
+        title: "Зубрилка",
         body: messageText,
         icon: ICON,
         badge: BADGE,

@@ -11,12 +11,12 @@ import { Mail, Lock, User, Eye, EyeOff, UserX } from "lucide-react";
 import { auth } from "../firebase";
 import { createUserProfile } from "../api/firestore";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { useAlert } from "../components/Alert";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const RED = "#E5484D";
 
 function GoogleG() {
   return (
@@ -36,7 +36,7 @@ const inputStyle = (t, bad, rightPad = 16) => ({
   width: "100%",
   padding: `14px ${rightPad}px 14px 44px`,
   borderRadius: 16,
-  border: `1px solid ${bad ? RED : t.border}`,
+  border: `1px solid ${bad ? t.danger : t.border}`,
   background: t.surface,
   color: t.text,
   fontSize: 15,
@@ -59,7 +59,7 @@ function Field({ icon, bad, eye, children }) {
             width: 8,
             height: 8,
             borderRadius: 999,
-            background: RED,
+            background: t.danger,
           }}
         />
       )}
@@ -222,7 +222,7 @@ export default function Login() {
   };
 
   const anim = (delay) => ({
-    animation: `fadeUp 500ms cubic-bezier(0.16,1,0.3,1) both`,
+    animation: `fadeUp 500ms ${EASE} both`,
     animationDelay: `${delay}ms`,
   });
 
@@ -231,7 +231,7 @@ export default function Login() {
       <div style={{ padding: "36px 0 8px 0", ...anim(0) }}>
         <img
           src="/favicon.png"
-          alt="Забубрилка"
+          alt="Зубрилка"
           width={72}
           height={72}
           style={{
@@ -248,7 +248,7 @@ export default function Login() {
 
       <div style={{ marginTop: 20, ...anim(80) }}>
         <div style={{ color: t.text, fontSize: 32, fontWeight: 700, letterSpacing: "-0.03em" }}>
-          Забубрилка
+          Зубрилка
         </div>
       </div>
 
@@ -284,7 +284,7 @@ export default function Login() {
               style={{
                 display: "grid",
                 gridTemplateRows: mode === "signup" ? "1fr" : "0fr",
-                transition: "grid-template-rows 400ms cubic-bezier(0.16,1,0.3,1)",
+                transition: `grid-template-rows 400ms ${EASE}`,
               }}
             >
               <div
@@ -335,7 +335,7 @@ export default function Login() {
           style={{
             display: "grid",
             gridTemplateRows: mode === "signup" ? "1fr" : "0fr",
-            transition: "grid-template-rows 400ms cubic-bezier(0.16,1,0.3,1)",
+            transition: `grid-template-rows 400ms ${EASE}`,
             marginBottom: mode === "signup" ? 0 : 12,
           }}
         >

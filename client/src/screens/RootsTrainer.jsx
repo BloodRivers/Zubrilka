@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
+import { shuffle } from "../utils";
 import ProgressBar from "../components/ProgressBar";
+import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
 import { Stat, TRAINER_LIST } from "./StressTrainer";
@@ -12,42 +14,33 @@ import { ROOT_ITEMS } from "../data/roots";
 const TOTAL = ROOT_ITEMS.length;
 
 const THEME_GROUPS = [
-  { title: "Гар/гор, Клан/клон, Твар/твор", desc: "Под ударением пишется А, без ударения — О.", words: ["заг•реть (о)", "заг•р (а)", "кл•няться (а)", "покл•ниться (о)", "тв•рить (о)", "тв•рец (о)"] },
-  { title: "Зар/зор", desc: "Без ударения пишется А, под ударением — О. Исключение: з•ревать (зоревать).", words: ["з•ря (а)", "з•рница (а)", "з•ревать (о — искл.)"] },
+  { title: "Гар/гор, Клан/клон, Твар/твор", desc: "Под ударением пишется то, что слышится, без ударения — О.", words: ["загреть", "загар", "клоняться", "поклониться", "творить", "творец"], exceptions: ["пригарь", "кланяющийся", "поклон", "поклонение", "утварь"] },
+  { title: "Зар/зор", desc: "Без ударения пишется А, под ударением — О.", words: ["зарница"], exceptions: ["заря", "зарево", "зорька"] },
 ];
 
 const SUFFIX_GROUPS = [
-  { title: "Бер/бир, Дер/дир, Мер/мир, Пер/пир, Тер/тир", desc: "Есть суффикс -а- → И, нет суффикса -а- → Е.", words: ["соб•рать (и)", "соб•ру (е)", "зам•реть (е)", "зами•рать (и)", "прот•реть (е)", "выд•ру (е)"] },
-  { title: "Блест/блист, Жег/жиг, Стел/стил, Чет/чит", desc: "Есть суффикс -а- → И, нет суффикса -а- → Е.", words: ["бл•стать (и)", "бл•стеть (е)", "заж•чь (е)", "подж•гать (и)", "расст•лать (и)", "выч•т (е)"] },
-  { title: "Кас/кос, Жим/жм", desc: "Есть суффикс -а- → А (И), нет суффикса -а- → О (Я).", words: ["к•саться (а)", "прик•снуться (о)", "сж•мать (и)", "сж•ть (я)"] },
+  { title: "Бер/бир, Дер/дир, Мер/мир, Пер/пир, Тер/тир", desc: "Есть суффикс -а- → И, нет суффикса -а- → Е.", words: ["собирать", "соберу", "замереть", "замирать", "протереть", "выдеру"] },
+  { title: "Блест/блист, Жег/жиг, Стел/стил, Чет/чит", desc: "Есть суффикс -а- → И, нет суффикса -а- → Е.", words: ["блистать", "блестеть", "зажечь", "поджигать", "расстилать", "вычтет"], exceptions: ["сочетать", "сочетание"] },
+  { title: "Кас/кос, Жим/жм", desc: "Есть суффикс -а- → А (И), нет суффикса -а- → О (Я).", words: ["касаться", "прикоснуться", "сжимать", "сжать"] },
 ];
 
 const CONS_GROUPS = [
-  { title: "Раст/ращ/рос", desc: "Перед СТ и Щ пишется А, перед С — О. Исключения: р•сток (росток), отрасль, Ростов.", words: ["р•стение (а)", "нар•щивать (а)", "выр•сший (о)", "р•сток (о — искл.)"] },
-  { title: "Лаг/лож", desc: "Перед Г пишется А, перед Ж — О.", words: ["пол•гать (а)", "предпол•жение (о)", "сл•жение (о)", "изл•гать (а)"] },
-  { title: "Скак/скоч", desc: "Перед К пишется А, перед Ч — О. Исключение: ск•чок (скачок), скачу.", words: ["ск•кать (а)", "выск•чить (о)", "ск•чок (а — искл.)"] },
+  { title: "Раст/ращ/рос", desc: "Перед СТ и Щ пишется А, перед С — О.", words: ["растение", "наращивать", "выросший"], exceptions: ["росток", "ростовщик", "Ростов", "Ростислав", "отрасль", "на вырост"] },
+  { title: "Лаг/лож", desc: "Перед Г пишется А, перед Ж — О.", words: ["полагать", "предположение", "сложение", "излагать"], exceptions: ["пОлог"] },
+  { title: "Скак/скоч", desc: "Перед К пишется А, перед Ч — О.", words: ["скакать", "выскочить"], exceptions: ["скачок", "скачу"] },
 ];
 
 const MEANING_GROUPS = [
-  { title: "Мак/мок", desc: "МАК — погружать в жидкость, МОК — пропускать жидкость, становиться мокрым.", words: ["обм•кнуть (а)", "вым•кнуть (о)", "пром•кнуть (о)"] },
-  { title: "Равн/ровн", desc: "РАВН — равный, одинаковый; РОВН — ровный, гладкий.", words: ["ср•внить числа (а)", "выр•внять поверхность (о)"] },
-  { title: "Плав/плов/плыв", desc: "Пишется ПЛАВ. Исключения: пл•вец (пловец), пл•вчиха (пловчиха), плывуны.", words: ["пл•вец (о — искл.)", "пл•вчиха (о — искл.)"] },
+  { title: "Мак/мок", desc: "МАК — погружать в жидкость, МОК — пропускать жидкость, становиться мокрым.", words: ["обмакнуть", "вымокнуть", "промокнуть"] },
+  { title: "Равн/ровн", desc: "РАВН — равный, одинаковый; РОВН — ровный, гладкий.", words: ["сравнить числа", "выровнять поверхность"], exceptions: ["равнина", "ровесник", "уровень", "поровну"] },
+  { title: "Плав/плов/плыв", desc: "Без ударения пишется ПЛАВ.", words: [], exceptions: ["пловец", "пловчиха", "плывуны"] },
 ];
 
 const IMIN_GROUPS = [
-  { title: "Им/ин", desc: "А/я чередуются с ИМ/ИН: перед суффиксом -а- пишется ИМ, без суффикса — Я.", words: ["сн•мать (и)", "сн•ть (я)", "обн•мать (и)", "пон•ть (я)"] },
+  { title: "Им/ин", desc: "А/я чередуются с ИМ/ИН: перед суффиксом -а- пишется ИМ, без суффикса — Я.", words: ["снимать", "снять", "обнимать", "понять"] },
 ];
 
 const THEORY = [...THEME_GROUPS, ...SUFFIX_GROUPS, ...CONS_GROUPS, ...MEANING_GROUPS, ...IMIN_GROUPS];
-
-function shuffle(arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 export default function RootsTrainer() {
   const { t } = useTheme();
@@ -57,7 +50,7 @@ export default function RootsTrainer() {
   const queueRef = useRef([]);
   const wrongRef = useRef(new Set());
   const inputRef = useRef(null);
-  const [tab, setTab] = useState("train");
+  const [tab, setTab] = useState("theory");
   const [current, setCurrent] = useState(null);
   const [input, setInput] = useState("");
   const [locked, setLocked] = useState(false);
@@ -153,8 +146,8 @@ export default function RootsTrainer() {
       value={tab}
       onChange={setTab}
       options={[
-        { v: "train", label: "Тренажёр" },
         { v: "theory", label: "Теория" },
+        { v: "train", label: "Тренажёр" },
       ]}
     />
   );
@@ -175,12 +168,26 @@ export default function RootsTrainer() {
                   </span>
                 ))}
               </div>
+              {g.exceptions?.length > 0 && (
+                <div style={{ marginTop: 12, padding: "11px 12px", borderRadius: 14, border: `1px solid ${t.danger}`, background: t.dangerTint }}>
+                  <div style={{ color: t.danger, fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", marginBottom: 8, textTransform: "uppercase" }}>
+                    Исключения
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {g.exceptions.map((w) => (
+                      <span key={w} style={{ fontSize: 13, fontWeight: 700, color: t.text, border: `1px solid ${t.danger}`, background: t.surface, padding: "4px 10px", borderRadius: 999 }}>
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <div style={{ borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, padding: "18px 18px 14px" }}>
             <div style={{ color: t.text, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Проверяемые и словарные</div>
             <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
-              Если гласная в корне проверяется ударением (л•сной — лес) — это проверяемая, а если нет (акк•ратный) — словарное слово, его нужно запомнить. В тренажёре есть и такие слова.
+              Если гласная в корне проверяется ударением (лесной — лес) — это проверяемая, а если нет (аккуратный) — словарное слово, его нужно запомнить. В тренажёре есть и такие слова.
             </div>
           </div>
         </div>
@@ -194,60 +201,25 @@ export default function RootsTrainer() {
     <div style={{ paddingTop: 4 }}>
       {renderTop()}
       <div style={{ display: "flex", gap: 8, marginBottom: 10, marginTop: 12 }}>
-        <Stat label="Серия" value={streak} tint="#46A758" />
+        <Stat label="Серия" value={streak} tint={t.success} />
         <Stat label="Осталось" value={remaining} />
-        <Stat label="Ошибки" value={mistakes} tint="#E5484D" />
+        <Stat label="Ошибки" value={mistakes} tint={t.danger} />
       </div>
       <ProgressBar value={progress} />
 
       {done ? (
-        <div style={{ paddingTop: 12 }}>
-          <div style={{ color: t.sub, fontSize: 13, marginBottom: 6 }}>Итог тренажёра</div>
-          {mistakes === 0 ? (
-            <div style={{ color: "#46A758", fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Без ошибок — отлично!</div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-              <div style={{ color: t.text, fontSize: 40, fontWeight: 700, letterSpacing: "-0.03em" }}>{TOTAL}</div>
-              <div style={{ color: t.sub, fontSize: 15 }}>слов пройдено</div>
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-            <Stat label="Ошибки" value={mistakes} tint="#E5484D" />
-            <Stat label="Лучшая серия" value={bestStreak} tint="#46A758" />
-          </div>
-          {wrongRef.current.size > 0 ? (
-            <>
-              <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Стоит повторить</div>
-              {[...wrongRef.current].map((w) => (
-                <div
-                  key={w}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "14px 0",
-                    borderBottom: `1px solid ${t.border}`,
-                  }}
-                >
-                  <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>{w}</div>
-                  <div style={{ fontSize: 12, color: t.sub, border: `1px solid ${t.border}`, padding: "5px 10px", borderRadius: 999 }}>
-                    повторить
-                  </div>
-                </div>
-              ))}
-            </>
-          ) : (
-            <div style={{ color: t.sub, fontSize: 14, padding: "10px 0" }}>Все слова усвоены уверенно.</div>
-          )}
-          <div style={{ marginTop: 30, display: "flex", flexDirection: "column", gap: 10 }}>
-            {trainer?.egeSubject && (
-              <Button variant="dashed" onClick={() => navigate(`/ege/${trainer.egeSubject}`)}>
-                Вернуться к ЕГЭ
-              </Button>
-            )}
-            <Button onClick={start}>Ещё раз</Button>
-          </div>
-        </div>
+        <TrainerDone
+          mistakes={mistakes}
+          total={TOTAL}
+          secondLabel="Лучшая серия"
+          secondValue={bestStreak}
+          scoreLabel="слов пройдено"
+          wrongItems={[...wrongRef.current].map((w) => ({ key: w, label: w, badge: "повторить" }))}
+          emptyMsg="Все слова усвоены уверенно."
+          onRetry={start}
+          onBack={trainer?.egeSubject ? () => navigate(`/ege/${trainer.egeSubject}`) : null}
+          backLabel="Вернуться к ЕГЭ"
+        />
       ) : (
         <div style={{ padding: "32px 20px", borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, textAlign: "center" }}>
           {!verdict && (
@@ -280,7 +252,7 @@ export default function RootsTrainer() {
               style={{
                 width: 82,
                 height: 64,
-                border: `2px solid ${verdict ? (verdict.correct ? "#46A758" : "#E5484D") : t.border}`,
+                border: `2px solid ${verdict ? (verdict.correct ? t.success : t.danger) : t.border}`,
                 borderRadius: 12,
                 textAlign: "center",
                 fontSize: 36,
@@ -295,7 +267,7 @@ export default function RootsTrainer() {
           </div>
           {verdict && (
             <div className="swap">
-              <div style={{ color: verdict.correct ? "#46A758" : "#E5484D", fontSize: 15, fontWeight: 700, marginTop: 14 }}>
+              <div style={{ color: verdict.correct ? t.success : t.danger, fontSize: 15, fontWeight: 700, marginTop: 14 }}>
                 {verdict.correct ? "Верно." : `Ошибка. Правильно: ${current.answer.toUpperCase()}.`}
               </div>
               <div style={{ color: t.text, fontSize: 13, lineHeight: 1.55, marginTop: 8, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>

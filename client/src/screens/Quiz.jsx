@@ -1,9 +1,10 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Check, X, Minus, BookmarkPlus } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
+import { EASE } from "../theme/theme";
 import { useAlert } from "../components/Alert";
 import ProgressBar from "../components/ProgressBar";
 import AuthorBar from "../components/AuthorBar";
@@ -70,7 +71,7 @@ function SizeSlider({ options, value, onChange, t }) {
     onChange(options[idxRef.current].id);
   };
 
-  const glide = live ? "none" : "left 220ms cubic-bezier(0.16,1,0.3,1), width 220ms cubic-bezier(0.16,1,0.3,1)";
+  const glide = live ? "none" : `left 220ms ${EASE}, width 220ms ${EASE}`;
 
   return (
     <div style={{ margin: "14px 0 22px" }}>
@@ -107,7 +108,7 @@ function SizeSlider({ options, value, onChange, t }) {
               borderRadius: 999,
               background: t.invBg,
               overflow: "hidden",
-              transition: live ? "none" : "width 220ms cubic-bezier(0.16,1,0.3,1)",
+              transition: live ? "none" : `width 220ms ${EASE}`,
             }}
           >
             {stream && (
@@ -134,7 +135,7 @@ function SizeSlider({ options, value, onChange, t }) {
               background: "#fff",
               boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
               border: `1px solid ${t.border}`,
-              transition: live ? "none" : "left 220ms cubic-bezier(0.16,1,0.3,1)",
+              transition: live ? "none" : `left 220ms ${EASE}`,
               pointerEvents: "none",
             }}
           />
@@ -1063,10 +1064,10 @@ export default function Quiz() {
           const flashing = flash.includes(i);
           const missed = isMulti && showState && isCorrect && !selected;
           let bg = t.surface, border = t.border, color = t.text, checkC = t.text, xC = t.text;
-          if (flashing) { bg = "#46A758"; border = "#46A758"; color = "#fff"; checkC = "#fff"; }
+          if (flashing) { bg = t.success; border = t.success; color = "#fff"; checkC = "#fff"; }
           else if (missed) { bg = "rgba(245,166,35,0.12)"; border = "#F5A623"; checkC = "#F5A623"; }
-          else if (showState && isCorrect) { bg = "rgba(70,167,88,0.12)"; border = "#46A758"; checkC = "#46A758"; }
-          else if (showState && selected && !isCorrect) { border = "#E5484D"; xC = "#E5484D"; }
+          else if (showState && isCorrect) { bg = t.successTint; border = t.success; checkC = t.success; }
+          else if (showState && selected && !isCorrect) { border = t.danger; xC = t.danger; }
           else if (!showState && selected) { border = t.invBg; }
           return (
             <button key={i} type="button" className="press"
@@ -1075,7 +1076,7 @@ export default function Quiz() {
                 if (isMulti) setMultiPick((prev) => prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]);
                 else pickSingle(i);
               }}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", marginBottom: 10, borderRadius: 14, border: `1px solid ${border}`, background: bg, color, fontSize: 14, fontFamily: "inherit", cursor: showState ? "default" : "pointer", textAlign: "left", transition: "transform 180ms cubic-bezier(0.16,1,0.3,1), opacity 180ms ease, background 200ms ease, border-color 200ms ease, color 200ms ease" }}>
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", marginBottom: 10, borderRadius: 14, border: `1px solid ${border}`, background: bg, color, fontSize: 14, fontFamily: "inherit", cursor: showState ? "default" : "pointer", textAlign: "left", transition: `transform 180ms ${EASE}, opacity 180ms ease, background 200ms ease, border-color 200ms ease, color 200ms ease` }}>
               {isMulti && (
                 <span
                   style={{
@@ -1087,8 +1088,8 @@ export default function Quiz() {
                       : showState && isCorrect
                         ? `1.5px solid #F5A623`
                         : `1.5px solid ${showState ? t.sub : t.border}`,
-                    background: flashing ? "#fff" : missed ? "transparent" : showState && isCorrect ? "#46A758" : !showState && selected ? t.invBg : "transparent",
-                    color: flashing ? "#46A758" : showState && isCorrect && !selected ? "#F5A623" : showState && isCorrect ? "#fff" : t.inv,
+                    background: flashing ? "#fff" : missed ? "transparent" : showState && isCorrect ? t.success : !showState && selected ? t.invBg : "transparent",
+                    color: flashing ? t.success : showState && isCorrect && !selected ? "#F5A623" : showState && isCorrect ? "#fff" : t.inv,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1194,14 +1195,14 @@ export default function Quiz() {
       let opacity = 1;
       if (state === "selected") border = t.invBg;
       if (state === "done") {
-        bg = "rgba(70,167,88,0.14)";
+        bg = t.successTint;
         color = t.text;
-        border = "#46A758";
+        border = t.success;
         opacity = 0.62;
       }
       if (state === "wrong") {
-        border = "#E5484D";
-        color = "#E5484D";
+        border = t.danger;
+        color = t.danger;
       }
       return {
         width: "100%",
@@ -1219,7 +1220,7 @@ export default function Quiz() {
         lineHeight: 1.35,
         textAlign: "center",
         cursor: state === "done" ? "default" : "pointer",
-        transition: "transform 180ms cubic-bezier(0.16,1,0.3,1), border-color 160ms ease, background 160ms ease, opacity 280ms ease",
+        transition: `transform 180ms ${EASE}, border-color 160ms ease, background 160ms ease, opacity 280ms ease`,
       };
     };
 
