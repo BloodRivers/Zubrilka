@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Minus } from "lucide-react";
+import { Check, X, Minus } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 
 /** Пауза между словами — чтобы «проверку» было видно, а не только итог. */
@@ -43,6 +43,8 @@ export default function MarkedAnswer({ text, marks = [], whys = [], live = false
   const reason = open != null ? String(whys?.[open] || "").trim() : "";
   const openLook = open != null ? LOOKS[marks[open]] : null;
   const flagged = words.some((_, i) => i < shown && LOOKS[marks[i]]);
+  // Верный ответ иначе не даёт никакого сигнала — только ненулевые статусы рисуются.
+  const allOk = words.length > 0 && shown >= words.length && words.every((_, i) => marks[i] === "ok");
 
   return (
     <div style={style}>
@@ -108,6 +110,26 @@ export default function MarkedAnswer({ text, marks = [], whys = [], live = false
             </button>
           );
         })}
+        {allOk && (
+          <span
+            className="mark-in"
+            title="Полностью верно"
+            style={{
+              marginLeft: "auto",
+              width: 22,
+              height: 22,
+              borderRadius: 999,
+              background: t.success,
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Check size={14} strokeWidth={3.5} />
+          </span>
+        )}
       </div>
       {reason && openLook ? (
         <div
