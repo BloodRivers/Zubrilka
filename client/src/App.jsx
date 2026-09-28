@@ -777,7 +777,7 @@ function Shell() {
               <Route path="/results" element={isGuest ? <GuestBlock /> : <Results />} />
               <Route path="/user/:userId" element={<UserProfile />} />
               <Route path="/terms" element={<Legal doc="terms" />} />
-              <Route path="/grade-lab" element={<GradeLab />} />
+              {import.meta.env.DEV && <Route path="/grade-lab" element={<GradeLab />} />}
               <Route path="/privacy" element={<Legal doc="privacy" />} />
               <Route path="/cookies" element={<Legal doc="cookies" />} />
               <Route path="*" element={<NotFound />} />

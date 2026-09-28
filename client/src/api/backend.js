@@ -115,15 +115,15 @@ export function testSizeLabel(test) {
 
 const SYSTEM_GRADE =
   "Ты строгий, но доброжелательный преподаватель, проверяешь контрольную. "
-  + "Ученику был задан конкретный вопрос. Оцениваешь ТОЛЬКО его ответ на этот вопрос по конспекту. "
-  + "Не пересказывай конспект, не оценивай оформление и длину ответа — только содержательность ответа на вопрос. "
-  + "Если ответ в целом верный по конспекту — высокая оценка, пропущенные сущности снижают. "
-  + "Верни ТОЛЬКО JSON: {\"s\":[\"ok\"],\"w\":[\"\"],\"grade\":5,\"comment\":\"что верно и что упущено\"}. grade 1–5. "
-  + 's — массив ровно из N статусов, где N = число слов в ответе ученика, в том же порядке: '
+  + "Ученику задано несколько вопросов, на каждый он написал ответ. Оцениваешь ТОЛЬКО его ответы по конспекту. "
+  + "Не пересказывай конспект, не оценивай оформление и длину ответов — только содержательность. "
+  + "Верни ТОЛЬКО JSON: {\"results\":[{\"s\":[\"ok\"],\"w\":[\"\"],\"grade\":5,\"comment\":\"что верно и что упущено\"}]}. "
+  + "results — массив РОВНО из N элементов в том же порядке, N = число вопросов; ни одного лишнего элемента. "
+  + 'Для вопроса i: s — массив ровно из Ni статусов, где Ni = число слов в ЕГО ответе, в том же порядке: '
   + '"ok" — слово верное, "part" — верное, но неполное или неточное, "bad" — неверное, искажённое или лишнее. '
-  + 'w — такой же массив из N коротких причин (по ученику кликают на слово и читают объяснение): '
+  + 'w — такой же массив из Ni коротких причин (по ученику кликают на слово и читают объяснение): '
   + 'для "ok" — пустая строка "", для "part"/"bad" — 3–8 слов, например "не та эпоха", "нет единиц измерения". '
-  + "Первый элемент s пиши сразу, без преамбулы — ответ ученика читают слово за словом.";
+  + "Пиши вопросы по очереди, без преамбулы: ученик читает свой ответ слово за словом.";
 
 function buildNoteContext(notes) {
   return notes
@@ -504,70 +504,69 @@ export async function generateTest(noteIds, modesOrType) {
 }
 
 /**
- * Статусы слов из ПРИЁМОГО (часто битого) JSON — по мере стрима.
- * Скан по `"s":[...]`, а не JSON.parse: поток всегда обрезан на полуслове.
+ * Разбор ПРИЁМОГО (обрезанного на полуслове) JSON пачки проверок.
+ * Отдаём только те задания, чей объект уже закрылся — ученик видит разбор
+ * задания сразу, не дожидаясь остальных.
  */
-const ESCAPES = { n: "\n", t: "\t", r: "\r", '"': '"', "\\": "\\", "/": "/" };
-
-/**
- * Только ЗАВЕРШЁННЫЕ строки массива по ключу — терпимо к обрезанному JSON.
- * Скопирован поток: `"s":["ok","ba` должен дать ["ok"], а не ["ok","ba"].
- */
-export function parseStringArray(text, key) {
+export function parseWrittenBatch(text) {
   const s = String(text || "");
-  const at = s.indexOf(`"${key}"`);
-  if (at < 0) return [];
-  const open = s.indexOf("[", at);
-  if (open < 0) return [];
+  const key = s.indexOf('"results"');
+  if (key < 0) return [];
   const out = [];
-  let i = open + 1;
+  let i = s.indexOf("[", key);
+  if (i < 0) return out;
+  i++;
   while (i < s.length) {
-    if (s[i] === "]") break; // массив закрыт — дальше чужие строки (например, comment)
-    if (s[i] !== '"') { i++; continue; }
-    let j = i + 1;
-    let buf = "";
-    let closed = false;
-    while (j < s.length) {
+    if (s[i] === "]") break;
+    if (s[i] !== "{") { i++; continue; }
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let end = -1;
+    for (let j = i; j < s.length; j++) {
       const c = s[j];
-      if (c === "\\") { buf += ESCAPES[s[j + 1]] ?? s[j + 1] ?? ""; j += 2; continue; }
-      if (c === '"') { closed = true; j++; break; }
-      buf += c;
-      j++;
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}" && --depth === 0) { end = j + 1; break; }
     }
-    if (!closed) break; // строка ещё дописывается
-    out.push(buf);
-    i = j;
+    if (end < 0) break; // объект ещё дописывается
+    try {
+      const o = JSON.parse(s.slice(i, end));
+      out.push({
+        marks: (Array.isArray(o.s) ? o.s : []).filter((v) => v === "ok" || v === "part" || v === "bad"),
+        whys: Array.isArray(o.w) ? o.w.map(String) : [],
+        grade: Number(o.grade) || 0,
+        comment: String(o.comment || "").trim(),
+      });
+    } catch {
+      // мусорный элемент — пропускаем, следующий разберём
+    }
+    i = end;
   }
   return out;
 }
 
-export function parseWrittenMarks(text) {
-  return parseStringArray(text, "s").filter((v) => v === "ok" || v === "part" || v === "bad");
-}
-
-/** Причины по словам — приходят позже статусов, поэтому кликать можно не сразу. */
-export function parseWrittenWhys(text) {
-  return parseStringArray(text, "w");
-}
-
-export function gradeWritten(noteText, question, answer, onDelta) {
+/** Одна проверка на всю пачку вопросов: 1 слот квоты вместо N. */
+export function gradeWritten(noteText, questions, answers, onDelta) {
+  const list = (questions || []).map((q, i) => {
+    const words = writtenWords(answers[i]);
+    return `Задание ${i + 1} (слов в ответе: ${words.length}). Вопрос: ${String(q || "").slice(0, 400)}\nОтвет: ${words.join(" ")}`;
+  });
   return aiJSONStream({
     name: "grade-written",
     system: SYSTEM_GRADE,
-    prompt:
-      `Слова ответа ученика (${writtenWordCount(answer)} шт., раздели их пробелами в ответе):\n${writtenWords(answer)}\n\n`
-      + `Конспект:\n${String(noteText).slice(0, 12000)}\n\n`
-      + `Вопрос ученику:\n${String(question || "").slice(0, 400)}\n\n`
-      + `Ответ ученика:\n${answer}`,
+    prompt: `${list.join("\n\n")}\n\nКонспект:\n${String(noteText).slice(0, 12000)}`,
     onDelta,
-    maxTokens: 800,
+    maxTokens: 2000,
   });
 }
 
 function writtenWords(answer) {
   return String(answer || "").trim().split(/\s+/).filter(Boolean);
-}
-
-function writtenWordCount(answer) {
-  return writtenWords(answer).length;
 }

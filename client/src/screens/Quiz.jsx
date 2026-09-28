@@ -16,7 +16,7 @@ import {
   getNote, getTest, listNotes, getSubject, listResults, saveTest, saveTestResult, listTestsForNotes,
   listSubjects, copyTestToSubject,
 } from "../api/firestore";
-import { generateTest, normalizeTestPayload, gradeWritten, parseWrittenMarks, parseWrittenWhys, TEST_SIZES, writtenQuestionsOf } from "../api/backend";
+import { generateTest, normalizeTestPayload, gradeWritten, parseWrittenBatch, TEST_SIZES, writtenQuestionsOf } from "../api/backend";
 import { onAIStatus, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import MarkedAnswer from "../components/MarkedAnswer";
 import { sfx } from "../sfx";
@@ -707,28 +707,30 @@ export default function Quiz() {
       return;
     }
     setGrading(true);
-    setWrittenMarks(questions.map(() => []));
+    setWrittenMarks([]);
+    marksRef.current = [];
     try {
       const answers = questions.map((_, i) => (writtenAnswers[i] || "").trim());
-      const results = await Promise.all(
-        questions.map((q, i) =>
-          gradeWritten(noteTextRef.current || titleRef.current, q.prompt, answers[i], (partial) => {
-            const marks = parseWrittenMarks(partial);
-            const whys = parseWrittenWhys(partial);
-            marksRef.current = marksRef.current.map((m, j) => (j === i ? { marks, whys } : m));
-            setWrittenMarks(marksRef.current);
-          }).then((res) => ({
-            prompt: q.prompt,
-            answer: answers[i],
-            grade: Number(res?.grade) || 2,
-            comment: String(res?.comment || "").trim(),
-          }))
-        )
-      );
+      // Один запрос на всю пачку: 1 слот квоты вместо N, разбор всё равно стримится по заданиям.
+      await gradeWritten(noteTextRef.current || titleRef.current, questions.map((q) => q.prompt), answers, (partial) => {
+        marksRef.current = parseWrittenBatch(partial);
+        setWrittenMarks(marksRef.current);
+      });
+      const results = questions.map((q, i) => {
+        const got = marksRef.current[i] || {};
+        return {
+          prompt: q.prompt,
+          answer: answers[i],
+          grade: got.grade || 2,
+          comment: got.comment || "",
+          marks: got.marks || [],
+          whys: got.whys || [],
+        };
+      });
       setGrading(false);
       const grade = Math.round((results.reduce((a, r) => a + r.grade, 0) / results.length) * 10) / 10;
       const wr = {
-        questions: results.map((r, i) => ({ ...r, marks: marksRef.current[i]?.marks, whys: marksRef.current[i]?.whys })),
+        questions: results,
         grade,
         comment: results.map((r, i) => `${i + 1}. ${r.comment || "—"}`).join(" "),
       };

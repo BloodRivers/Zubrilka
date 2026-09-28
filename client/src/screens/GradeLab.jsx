@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
 import Button from "../components/Button";
 import MarkedAnswer from "../components/MarkedAnswer";
-import { gradeWritten, parseWrittenMarks, parseWrittenWhys } from "../api/backend";
+import { gradeWritten, parseWrittenBatch } from "../api/backend";
 import { aiRemainingToday } from "../api/ai";
 
 const SAMPLE_NOTE = "Основания клетки. Клеточная мембрана состоит из липидного бислоя и белков. "
@@ -12,16 +12,15 @@ const SAMPLE_NOTE = "Основания клетки. Клеточная мем�
 /** Мок: гоняет UI без запроса к ИИ (лимит 20/сутки жалко). */
 function mockGrade(answer, onDelta) {
   const words = String(answer).trim().split(/\s+/).filter(Boolean);
-  const REASONS = {
-    part: "перечислено не всё",
-    bad: "не относится к вопросу",
-  };
+  const REASONS = { part: "перечислено не всё", bad: "не относится к вопросу" };
   const cycle = ["ok", "ok", "part", "bad"];
   const payload = JSON.stringify({
-    s: words.map((_, i) => cycle[i % cycle.length]),
-    w: words.map((_, i) => REASONS[cycle[i % cycle.length]] || ""),
-    grade: 3,
-    comment: "Мок-ответ: кликни по жёлтому или красному слову.",
+    results: [{
+      s: words.map((_, i) => cycle[i % cycle.length]),
+      w: words.map((_, i) => REASONS[cycle[i % cycle.length]] || ""),
+      grade: 3,
+      comment: "Мок-ответ: кликни по жёлтому или красному слову.",
+    }],
   });
   let i = 0;
   return new Promise((resolve) => {
@@ -42,8 +41,6 @@ export default function GradeLab() {
   const [note, setNote] = useState(SAMPLE_NOTE);
   const [question, setQuestion] = useState("Какие бывают виды транспорта через мембрану?");
   const [answer, setAnswer] = useState("Диффузия и осмос АТФ");
-  const [marks, setMarks] = useState([]);
-  const [whys, setWhys] = useState([]);
   const [raw, setRaw] = useState("");
   const [live, setLive] = useState(false);
   const [res, setRes] = useState(null);
@@ -52,24 +49,21 @@ export default function GradeLab() {
   const words = answer.trim().split(/\s+/).filter(Boolean).length;
   const box = { width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 14, border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontSize: 14, fontFamily: "inherit", lineHeight: 1.45, resize: "vertical" };
   const label = { color: t.sub, fontSize: 12, fontWeight: 600, marginBottom: 6 };
+  const got = res?.results?.[0] || {};
 
   const run = async (kind) => {
     setErr("");
     setRes(null);
-    setMarks([]);
-    setWhys([]);
     setRaw("");
     setLive(true);
     try {
       const onDelta = (partial) => {
         setRaw(partial);
-        setMarks(parseWrittenMarks(partial));
-        setWhys(parseWrittenWhys(partial));
+        setRes({ results: parseWrittenBatch(partial) });
       };
-      const out = kind === "mock"
-        ? await mockGrade(answer, onDelta)
-        : await gradeWritten(note, question, answer, onDelta);
-      setRes(out);
+      await (kind === "mock"
+        ? mockGrade(answer, onDelta)
+        : gradeWritten(note, [question], [answer], onDelta));
     } catch (e) {
       setErr(e?.message || "Ошибка");
     } finally {
@@ -109,14 +103,14 @@ export default function GradeLab() {
       <div style={{ padding: 16, borderRadius: 16, border: `1px solid ${t.border}`, background: t.surface, marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div style={{ ...label, marginBottom: 0 }}>РАЗМЕТКА ОТВЕТА</div>
-          {res && <div style={{ color: t.text, fontSize: 20, fontWeight: 700 }}>{res.grade}/5</div>}
+          {got.grade ? <div style={{ color: t.text, fontSize: 20, fontWeight: 700 }}>{got.grade}/5</div> : null}
         </div>
-        <MarkedAnswer text={answer} marks={marks} whys={whys} live={live} />
-        <div style={{ color: marks.length === words ? t.sub : t.danger, fontSize: 12, marginTop: 12 }}>
-          статусов {marks.length} / слов {words} · причин {whys.filter(Boolean).length}
-          {marks.length === words ? " ✓" : " — модель не совпала по длине"}
+        <MarkedAnswer text={answer} marks={got.marks} whys={got.whys} live={live} />
+        <div style={{ color: (got.marks?.length || 0) === words ? t.sub : t.danger, fontSize: 12, marginTop: 12 }}>
+          статусов {got.marks?.length || 0} / слов {words} · причин {(got.whys || []).filter(Boolean).length}
+          {(got.marks?.length || 0) === words ? " ✓" : " — модель не совпала по длине"}
         </div>
-        {res?.comment && <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{res.comment}</div>}
+        {got.comment && <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{got.comment}</div>}
         {err && <div style={{ color: t.danger, fontSize: 13, marginTop: 8 }}>{err}</div>}
       </div>
 
