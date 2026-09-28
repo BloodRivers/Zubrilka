@@ -167,6 +167,21 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   transform: rotateY(180deg);
 }
 
+@keyframes markIn {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.mark-in { animation: markIn 260ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes markPending {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.85; }
+}
+
+.mark-pending { animation: markPending 1.05s ease-in-out infinite; }
+.mark-spin { animation: spin 700ms linear infinite; display: inline-block; }
+
 .ghost-bone {
   position: relative;
   overflow: hidden;

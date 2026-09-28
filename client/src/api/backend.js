@@ -1,5 +1,5 @@
 import { getNote } from "./firestore";
-import { aiJSON, aiText, collapseRepeats, assertVisionWorks } from "./ai";
+import { aiJSON, aiJSONStream, aiText, collapseRepeats, assertVisionWorks } from "./ai";
 
 const SYSTEM_OCR =
   "Ты OCR для рукописных/печатных конспектов. "
@@ -118,7 +118,12 @@ const SYSTEM_GRADE =
   + "Ученику был задан конкретный вопрос. Оцениваешь ТОЛЬКО его ответ на этот вопрос по конспекту. "
   + "Не пересказывай конспект, не оценивай оформление и длину ответа — только содержательность ответа на вопрос. "
   + "Если ответ в целом верный по конспекту — высокая оценка, пропущенные сущности снижают. "
-  + 'Верни ТОЛЬКО JSON: {"grade":5,"comment":"что верно и что упущено"}. grade 1–5.';
+  + "Верни ТОЛЬКО JSON: {\"s\":[\"ok\"],\"w\":[\"\"],\"grade\":5,\"comment\":\"что верно и что упущено\"}. grade 1–5. "
+  + 's — массив ровно из N статусов, где N = число слов в ответе ученика, в том же порядке: '
+  + '"ok" — слово верное, "part" — верное, но неполное или неточное, "bad" — неверное, искажённое или лишнее. '
+  + 'w — такой же массив из N коротких причин (по ученику кликают на слово и читают объяснение): '
+  + 'для "ok" — пустая строка "", для "part"/"bad" — 3–8 слов, например "не та эпоха", "нет единиц измерения". '
+  + "Первый элемент s пиши сразу, без преамбулы — ответ ученика читают слово за словом.";
 
 function buildNoteContext(notes) {
   return notes
@@ -498,10 +503,71 @@ export async function generateTest(noteIds, modesOrType) {
   return normalized;
 }
 
-export const gradeWritten = (noteText, question, answer) =>
-  aiJSON({
+/**
+ * Статусы слов из ПРИЁМОГО (часто битого) JSON — по мере стрима.
+ * Скан по `"s":[...]`, а не JSON.parse: поток всегда обрезан на полуслове.
+ */
+const ESCAPES = { n: "\n", t: "\t", r: "\r", '"': '"', "\\": "\\", "/": "/" };
+
+/**
+ * Только ЗАВЕРШЁННЫЕ строки массива по ключу — терпимо к обрезанному JSON.
+ * Скопирован поток: `"s":["ok","ba` должен дать ["ok"], а не ["ok","ba"].
+ */
+export function parseStringArray(text, key) {
+  const s = String(text || "");
+  const at = s.indexOf(`"${key}"`);
+  if (at < 0) return [];
+  const open = s.indexOf("[", at);
+  if (open < 0) return [];
+  const out = [];
+  let i = open + 1;
+  while (i < s.length) {
+    if (s[i] === "]") break; // массив закрыт — дальше чужие строки (например, comment)
+    if (s[i] !== '"') { i++; continue; }
+    let j = i + 1;
+    let buf = "";
+    let closed = false;
+    while (j < s.length) {
+      const c = s[j];
+      if (c === "\\") { buf += ESCAPES[s[j + 1]] ?? s[j + 1] ?? ""; j += 2; continue; }
+      if (c === '"') { closed = true; j++; break; }
+      buf += c;
+      j++;
+    }
+    if (!closed) break; // строка ещё дописывается
+    out.push(buf);
+    i = j;
+  }
+  return out;
+}
+
+export function parseWrittenMarks(text) {
+  return parseStringArray(text, "s").filter((v) => v === "ok" || v === "part" || v === "bad");
+}
+
+/** Причины по словам — приходят позже статусов, поэтому кликать можно не сразу. */
+export function parseWrittenWhys(text) {
+  return parseStringArray(text, "w");
+}
+
+export function gradeWritten(noteText, question, answer, onDelta) {
+  return aiJSONStream({
     name: "grade-written",
     system: SYSTEM_GRADE,
-    prompt: `Конспект:\n${String(noteText).slice(0, 12000)}\n\nВопрос ученику:\n${String(question || "").slice(0, 400)}\n\nОтвет ученика:\n${answer}`,
+    prompt:
+      `Слова ответа ученика (${writtenWordCount(answer)} шт., раздели их пробелами в ответе):\n${writtenWords(answer)}\n\n`
+      + `Конспект:\n${String(noteText).slice(0, 12000)}\n\n`
+      + `Вопрос ученику:\n${String(question || "").slice(0, 400)}\n\n`
+      + `Ответ ученика:\n${answer}`,
+    onDelta,
     maxTokens: 800,
   });
+}
+
+function writtenWords(answer) {
+  return String(answer || "").trim().split(/\s+/).filter(Boolean);
+}
+
+function writtenWordCount(answer) {
+  return writtenWords(answer).length;
+}

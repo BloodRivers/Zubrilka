@@ -31,6 +31,7 @@ import Account from "./screens/Account";
 import Library from "./screens/Library";
 import UserProfile from "./screens/UserProfile";
 import Legal from "./screens/Legal";
+import GradeLab from "./screens/GradeLab";
 import NotFound from "./screens/NotFound";
 import { Check, Lock } from "lucide-react";
 import { TRAINER_LIST } from "./screens/StressTrainer";
@@ -776,6 +777,7 @@ function Shell() {
               <Route path="/results" element={isGuest ? <GuestBlock /> : <Results />} />
               <Route path="/user/:userId" element={<UserProfile />} />
               <Route path="/terms" element={<Legal doc="terms" />} />
+              <Route path="/grade-lab" element={<GradeLab />} />
               <Route path="/privacy" element={<Legal doc="privacy" />} />
               <Route path="/cookies" element={<Legal doc="cookies" />} />
               <Route path="*" element={<NotFound />} />

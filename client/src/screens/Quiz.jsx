@@ -16,8 +16,9 @@ import {
   getNote, getTest, listNotes, getSubject, listResults, saveTest, saveTestResult, listTestsForNotes,
   listSubjects, copyTestToSubject,
 } from "../api/firestore";
-import { generateTest, normalizeTestPayload, gradeWritten, TEST_SIZES, writtenQuestionsOf } from "../api/backend";
+import { generateTest, normalizeTestPayload, gradeWritten, parseWrittenMarks, parseWrittenWhys, TEST_SIZES, writtenQuestionsOf } from "../api/backend";
 import { onAIStatus, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
+import MarkedAnswer from "../components/MarkedAnswer";
 import { sfx } from "../sfx";
 import { setQuizActive } from "../nav";
 
@@ -27,7 +28,7 @@ const MODE_OPTS = [
   { id: "multi", label: "Несколько верных", hint: "Отмечаешь все подходящие, потом «Ответить»" },
   { id: "quizlet", label: "Квизлет", hint: "Карточки термин ↔ определение" },
   { id: "match", label: "Сопоставь", hint: "Две колонки: найди связанные пары из конспекта" },
-  { id: "written", label: "Письменный ответ", hint: "Свободный текст, проверяет ИИ" },
+  { id: "written", label: "Письменный ответ", hint: "Короткий ответ, проверяет ИИ на глазах" },
 ];
 
 const MATCH_ROUND = 4;
@@ -219,6 +220,7 @@ export default function Quiz() {
   const [quizKnown, setQuizKnown] = useState([]);
   const [writtenAnswers, setWrittenAnswers] = useState([]);
   const [writtenResult, setWrittenResult] = useState(null);
+  const [writtenMarks, setWrittenMarks] = useState([]);
   const [grading, setGrading] = useState(false);
   const [loading, setLoading] = useState(true);
   const showGhost = useGhostHold(loading);
@@ -251,6 +253,7 @@ export default function Quiz() {
   const pendingRef = useRef(null);
   const answersRef = useRef([]);
   const quizKnownRef = useRef([]);
+  const marksRef = useRef([]);
   const matchOkRef = useRef([]);
 
   useEffect(() => onAIStatus(setStatus), []);
@@ -704,31 +707,36 @@ export default function Quiz() {
       return;
     }
     setGrading(true);
+    setWrittenMarks(questions.map(() => []));
     try {
       const answers = questions.map((_, i) => (writtenAnswers[i] || "").trim());
       const results = await Promise.all(
         questions.map((q, i) =>
-          gradeWritten(noteTextRef.current || titleRef.current, q.prompt, answers[i])
-            .then((res) => ({
-              prompt: q.prompt,
-              answer: answers[i],
-              grade: Number(res?.grade) || 2,
-              comment: String(res?.comment || "").trim(),
-            }))
+          gradeWritten(noteTextRef.current || titleRef.current, q.prompt, answers[i], (partial) => {
+            const marks = parseWrittenMarks(partial);
+            const whys = parseWrittenWhys(partial);
+            marksRef.current = marksRef.current.map((m, j) => (j === i ? { marks, whys } : m));
+            setWrittenMarks(marksRef.current);
+          }).then((res) => ({
+            prompt: q.prompt,
+            answer: answers[i],
+            grade: Number(res?.grade) || 2,
+            comment: String(res?.comment || "").trim(),
+          }))
         )
       );
+      setGrading(false);
       const grade = Math.round((results.reduce((a, r) => a + r.grade, 0) / results.length) * 10) / 10;
       const wr = {
-        questions: results,
+        questions: results.map((r, i) => ({ ...r, marks: marksRef.current[i]?.marks, whys: marksRef.current[i]?.whys })),
         grade,
         comment: results.map((r, i) => `${i + 1}. ${r.comment || "—"}`).join(" "),
       };
       setWrittenResult(wr);
-      setTimeout(() => finish(answersRef.current, quizKnownRef.current, wr, matchOkRef.current), 1200);
+      setTimeout(() => finish(answersRef.current, quizKnownRef.current, wr, matchOkRef.current), 2600);
     } catch (err) {
-      alert(err?.message || "Не удалось проверить ответ");
-    } finally {
       setGrading(false);
+      alert(err?.message || "Не удалось проверить ответ");
     }
   };
 
@@ -1301,12 +1309,22 @@ export default function Quiz() {
                 <div style={{ color: t.text, fontSize: 16, fontWeight: 600, lineHeight: 1.5, marginBottom: 10 }}>
                   <MathText text={q.prompt} />
                 </div>
-                <textarea value={writtenAnswers[i] || ""} onChange={(e) => {
-                  const next = [...writtenAnswers];
-                  next[i] = e.target.value;
-                  setWrittenAnswers(next);
-                }} placeholder="Коротко, максимум 4 слова…" rows={2}
-                  style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 14, border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontSize: 14.5, fontFamily: "inherit", lineHeight: 1.45, resize: "vertical" }} />
+                {grading ? (
+                  <>
+                    <MarkedAnswer text={writtenAnswers[i]} marks={writtenMarks[i]?.marks} whys={writtenMarks[i]?.whys} live />
+                    <div style={{ color: t.sub, fontSize: 12, marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span className="mark-spin" style={{ width: 11, height: 11, borderRadius: 999, border: `1.5px solid ${t.border}`, borderTopColor: t.text }} />
+                      ИИ проверяет по конспекту…
+                    </div>
+                  </>
+                ) : (
+                  <textarea value={writtenAnswers[i] || ""} onChange={(e) => {
+                    const next = [...writtenAnswers];
+                    next[i] = e.target.value;
+                    setWrittenAnswers(next);
+                  }} placeholder="Коротко, максимум 4 слова…" rows={2}
+                    style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 14, border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontSize: 14.5, fontFamily: "inherit", lineHeight: 1.45, resize: "vertical" }} />
+                )}
               </div>
             ))}
             <Button onClick={submitWritten} disabled={grading || questions.some((_, i) => !(writtenAnswers[i] || "").trim())}>
@@ -1322,7 +1340,8 @@ export default function Quiz() {
             <div style={{ color: t.text, fontSize: 28, fontWeight: 700, marginBottom: 14 }}>{writtenResult.grade}/5</div>
             {(writtenResult.questions || []).map((r, i) => (
               <div key={i} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: i < writtenResult.questions.length - 1 ? `1px solid ${t.border}` : "none" }}>
-                <div style={{ color: t.text, fontSize: 14, fontWeight: 600, marginBottom: 4 }}><MathText text={r.prompt} /></div>
+                <div style={{ color: t.text, fontSize: 14, fontWeight: 600, marginBottom: 6 }}><MathText text={r.prompt} /></div>
+                <MarkedAnswer text={r.answer} marks={r.marks} whys={r.whys} style={{ marginBottom: 8 }} />
                 <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45 }}>{r.grade}/5 · {r.comment || "—"}</div>
               </div>
             ))}

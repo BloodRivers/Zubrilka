@@ -442,6 +442,88 @@ export async function aiJSON(opts) {
   return parseJSON(text);
 }
 
+/**
+ * Стримит JSON-ответ: onDelta получает накопленный текст на каждом чанке.
+ * Для сбора слово-за-словом нужен живой поток — иначе пользователь видит только «Проверяю…».
+ * Без retry: стрим уже начат, повтор молча сожжёт ещё один слот квоты.
+ */
+export async function aiJSONStream({ system, prompt, onDelta, maxTokens = 2000, name = "ai-stream" }) {
+  const KEY = getApiKey();
+  const MODEL = getModel();
+  if (!KEY) throw new Error("Нет ключа Polza AI — вставь его в Настройках → Модель ИИ");
+  await reserveAiSlot();
+  emitStatus("Жду ответ модели…");
+
+  let res;
+  try {
+    res = await fetch(API_BASE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.3,
+        stream: true,
+        response_format: { type: "json_object" },
+      }),
+    });
+  } catch (err) {
+    throw new Error(networkHint(err));
+  }
+
+  if (!res.ok || !res.body) {
+    const raw = await res.text().catch(() => "");
+    let msg = `Polza AI ${res.status}`;
+    try {
+      const d = JSON.parse(raw);
+      msg = d?.error?.message || d?.message || msg;
+    } catch {}
+    pushLog({ ts: Date.now(), name, model: MODEL, ok: false, out: msg });
+    throw new Error(msg);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let full = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const chunk = line.slice(5).trim();
+        if (!chunk || chunk === "[DONE]") continue;
+        let piece = "";
+        try {
+          piece = JSON.parse(chunk)?.choices?.[0]?.delta?.content ?? "";
+        } catch {
+          continue; // обрывок недопарсенного SSE-кадра — дождёмся следующего
+        }
+        if (!piece) continue;
+        full += piece;
+        onDelta?.(full);
+      }
+    }
+  } catch (err) {
+    // Стрим пошёл и упал — переспрашивать нельзя, ученик уже видит половину разбора.
+    // А если не пришло ничего — обычный aiJSON повторит 3 раза сам (callPolza умеет retry).
+    if (full) throw new Error(networkHint(err));
+    return aiJSON({ system, prompt, maxTokens, name });
+  }
+
+  pushLog({ ts: Date.now(), name, model: MODEL, ok: true, out: full.slice(0, 1500) });
+  return parseJSON(full);
+}
+
 /** Жёсткая проверка: модель обязана подтвердить, что видит фото. */
 export async function assertVisionWorks(imageDataUrl) {
   emitStatus("Проверяю, видит ли модель фото…");
