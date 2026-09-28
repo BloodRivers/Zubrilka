@@ -1305,7 +1305,7 @@ export default function Quiz() {
                   const next = [...writtenAnswers];
                   next[i] = e.target.value;
                   setWrittenAnswers(next);
-                }} placeholder="Напиши своими словами…" rows={5}
+                }} placeholder="Коротко, максимум 4 слова…" rows={2}
                   style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 14, border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontSize: 14.5, fontFamily: "inherit", lineHeight: 1.45, resize: "vertical" }} />
               </div>
             ))}

@@ -16,9 +16,10 @@ async function loadNotes(uid, ids) {
 const SYSTEM = `Ты генерируешь материалы для повторения по конспекту. `
   + `Верни ТОЛЬКО валидный JSON. Стиль: много коротких единиц. `
   + `Вопрос ≤120 символов, вариант ≤60. `
-  + `Формат: {"questions":[{"kind":"single|multi","q":"...","options":["а","б","в","г"],"correct":0,"topic":"...","explain":"..."}],`
+  + `Формат: {"questions":[{"kind":"single|multi","q":"...","options":["а","б","в","г","д"],"correct":0,"topic":"...","explain":"..."}],`
   + `"quizlet":[{"term":"...","definition":"...","topic":"..."}],"written":{"prompt":"..."}}. `
-  + `single: correct — число 0..3; multi: correct — массив из 2–3 индексов. `
+  + `У single и multi 3–6 вариантов. single: correct — число 0..5; multi: correct — массив из 2–3 индексов 0..5. `
+  + `written: спрашивай так, чтобы ответ был максимум 4 слова (конкретные факты, термины, формулы, даты), без «объясни почему»/«перечисли». `
   + `Не копируй фразы конспекта, не делай «Вспомни пункт».`;
 
 export function testRoute() {

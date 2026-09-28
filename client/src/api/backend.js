@@ -85,6 +85,8 @@ export function normalizeSummary(summary) {
 export const ALL_TEST_MODES = ["single", "multi", "quizlet", "match", "written"];
 const Q_MAX = 120;
 const OPT_MAX = 60;
+const OPTS_MIN = 3;
+const OPTS_MAX = 6;
 
 export const TEST_SIZES = {
   express: { single: 5, multi: 3, quizlet: 5, match: 4, written: 2, label: "Экспресс", hint: "меньше вопросов — быстрее" },
@@ -143,7 +145,7 @@ function buildTestSystem(modes, counts = DEFAULT_COUNTS) {
   if (wantSingle || wantMulti) {
     parts.push(
       '"questions":[{"kind":"single|multi","q":"короткий вопрос",'
-      + '"options":["а","б","в","г"],"correct":0,"topic":"тема","explain":"почему"}]'
+      + '"options":["а","б","в","г","д"],"correct":0,"topic":"тема","explain":"почему"}]'
     );
   }
   if (wantQuizlet) parts.push('"quizlet":[{"term":"термин","definition":"краткое определение","topic":"тема"}]');
@@ -162,10 +164,10 @@ function buildTestSystem(modes, counts = DEFAULT_COUNTS) {
     + `Вопрос ≤${Q_MAX} символов, вариант ответа ≤${OPT_MAX} символов. `
     + "Запрещено: «Вспомни пункт», Да/Нет, копипаст фраз конспекта, факты вне текста. "
     + (wantSingle
-      ? `single: ровно ${counts.single} вопросов, kind="single", correct — ЧИСЛО 0..3 (один верный). `
+      ? `single: ровно ${counts.single} вопросов, kind="single", ${OPTS_MIN}–${OPTS_MAX} вариантов, correct — ЧИСЛО 0..${OPTS_MAX - 1} (один верный). `
       : "")
     + (wantMulti
-      ? `multi: ровно ${counts.multi} вопросов, kind="multi", correct — МАССИВ из 2–3 индексов 0..3. `
+      ? `multi: ровно ${counts.multi} вопросов, kind="multi", ${OPTS_MIN}–${OPTS_MAX} вариантов, correct — МАССИВ из 2–3 индексов 0..${OPTS_MAX - 1} (не все варианты). `
       : "")
     + (wantQuizlet
       ? `quizlet: ровно ${counts.quizlet} карточек термин↔краткое определение. `
@@ -174,7 +176,7 @@ function buildTestSystem(modes, counts = DEFAULT_COUNTS) {
       ? `match: ровно ${counts.match} пар для сопоставления. left и right — любые связанные фрагменты из конспекта (понятие↔смысл, причина↔следствие, дата↔событие, формула↔название и т.п.); тип пар выбирай по материалу. Пары уникальны, без дублей left/right. `
       : "")
     + (wantWritten
-      ? `written: ровно ${counts.written} заданий-вопросов по конспекту (например, «Объясни, почему…», «Перечисли причины…», «Сравни…»). Если в конспекте есть математика (формулы, $...$), до половины заданий делай математическими (вычислить/выразить/сравнить), формулы пиши в $...$ — это обычный текст внутри строки JSON. Ученик пишет ответ своими словами на каждый вопрос. `
+      ? `written: ровно ${counts.written} заданий-вопросов по конспекту. Ответ ученика — МАКСИМУМ 4 СЛОВА, поэтому спрашивай только про конкретные факты/термины/формулы/даты («Кто автор?», «Какая формула?», «Чем различаются X и Y?»), НЕ «объясни почему», «перечисли», «сравни», «охарактеризуй». Формулы и математику пиши в $...$ — это обычный текст внутри строки JSON. `
       : "")
     + `Формат: ${schema}`
   );
@@ -188,7 +190,7 @@ function parseCorrectIndex(raw, options) {
   const asNum = Number(s);
   if (Number.isInteger(asNum) && asNum >= 0 && asNum < options.length) return asNum;
   const letter = s.toUpperCase();
-  const letterMap = { A: 0, B: 1, C: 2, D: 3, А: 0, Б: 1, В: 2, Г: 3 };
+  const letterMap = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, А: 0, Б: 1, В: 2, Г: 3, Д: 4, Е: 5 };
   if (letterMap[letter] != null && letterMap[letter] < options.length) return letterMap[letter];
   const byText = options.findIndex((o) => String(o).trim() === s);
   return byText >= 0 ? byText : -1;
@@ -197,7 +199,7 @@ function parseCorrectIndex(raw, options) {
 function parseCorrectMulti(raw, options) {
   const arr = Array.isArray(raw) ? raw : typeof raw === "number" ? [raw] : [];
   const idxs = [...new Set(arr.map((x) => parseCorrectIndex(x, options)).filter((i) => i >= 0))].sort((a, b) => a - b);
-  return idxs.length >= 2 ? idxs : null;
+  return idxs.length >= 2 && idxs.length < options.length ? idxs : null;
 }
 
 function clip(s, max) {
@@ -238,9 +240,8 @@ export function normalizeQuestions(payload, modes = null, counts = DEFAULT_COUNT
     let options = Array.isArray(raw?.options)
       ? raw.options.map((o) => clip(o, OPT_MAX)).filter(Boolean)
       : [];
-    if (options.length > 4) options = options.slice(0, 4);
-    if (!q || options.length < 2) continue;
-    while (options.length < 4) options.push(`Вариант ${options.length + 1}`);
+    if (options.length > OPTS_MAX) options = options.slice(0, OPTS_MAX);
+    if (!q || options.length < OPTS_MIN) continue;
 
     if (/^вспомни пункт/i.test(q)) continue;
     const unique = new Set(options.map((o) => o.toLowerCase()));
