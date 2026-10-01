@@ -3,12 +3,17 @@ import { THEMES } from "./theme";
 
 const ThemeContext = createContext();
 const STORAGE_KEY = "zubrilka:theme";
+const STYLE_KEY = "zubrilka:note-style";
 const systemDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
 
 export function ThemeProvider({ children }) {
   const [pref, setPref] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+  });
+  const [noteStyle, setNoteStyleRaw] = useState(() => {
+    const saved = localStorage.getItem(STYLE_KEY);
+    return saved === "headings" ? "headings" : "accordion";
   });
   const [sysDark, setSysDark] = useState(systemDark);
   const animTimer = useRef(null);
@@ -24,6 +29,11 @@ export function ThemeProvider({ children }) {
     localStorage.setItem(STORAGE_KEY, pref);
   }, [pref]);
 
+  const setNoteStyle = useCallback((next) => {
+    localStorage.setItem(STYLE_KEY, next);
+    setNoteStyleRaw(next);
+  }, []);
+
   const changePref = useCallback((next) => {
     document.documentElement.classList.add("theme-anim");
     void document.body.offsetWidth;
@@ -36,8 +46,8 @@ export function ThemeProvider({ children }) {
 
   const theme = pref === "system" ? (sysDark ? "dark" : "light") : pref;
   const value = useMemo(
-    () => ({ pref, theme, setPref: changePref, t: THEMES[theme] }),
-    [pref, theme, changePref]
+    () => ({ pref, theme, setPref: changePref, noteStyle, setNoteStyle, t: THEMES[theme] }),
+    [pref, theme, changePref, noteStyle, setNoteStyle]
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

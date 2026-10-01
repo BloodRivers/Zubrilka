@@ -6,9 +6,10 @@ import { useTheme } from "../theme/ThemeContext";
 import { EASE } from "../theme/theme";
 import { useAlert } from "../components/Alert";
 import Button from "../components/Button";
+import { plural } from "../utils";
 import { createNote } from "../api/firestore";
 import { ocrNotePhotos, structureNote } from "../api/backend";
-import { classifyAttachFile, extractPdfText, extractTextFile, downscaleImageFile } from "../api/files";
+import { classifyAttachFile, extractPdfText, extractTextFile, extractDocxText, extractLegacyDoc, extractAttachImages, capNoteImages, downscaleImageFile } from "../api/files";
 import { onAIStatus, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 
 const WORK_PHRASES = [
@@ -22,7 +23,9 @@ const WORK_PHRASES = [
 ];
 
 const ACCEPT =
-  "image/*,application/pdf,text/plain,text/markdown,text/csv,.pdf,.txt,.md,.markdown,.csv,.log";
+  "image/*,application/pdf,.docx,.doc,"
+  + "application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,"
+  + "text/plain,text/markdown,text/csv,.pdf,.txt,.md,.markdown,.csv,.log";
 
 const genericName = () => {
   const d = new Date();
@@ -49,7 +52,7 @@ export default function NewNote() {
   const navigate = useNavigate();
   const { t } = useTheme();
   const { alert } = useAlert();
-  /** @type {[{id:string,kind:"image"|"pdf"|"text",name:string,src?:string,text?:string}]} */
+  /** @type {[{id:string,kind:"image"|"pdf"|"text"|"docx",name:string,src?:string,text?:string,images?:[{name:string,src:string}]}]} */
   const [attachments, setAttachments] = useState([]);
   const [text, setText] = useState("");
   const [titleMode, setTitleMode] = useState("ai");
@@ -91,18 +94,29 @@ export default function NewNote() {
     for (const file of picked) {
       const kind = classifyAttachFile(file);
       if (!kind) {
-        errors.push(`«${file.name}» — нужен фото, PDF или текст (.txt/.md)`);
+        errors.push(`«${file.name}» — нужен фото, PDF, Word (.docx) или текст (.txt/.md)`);
         continue;
       }
       try {
         if (kind === "image") {
           const src = await downscaleImageFile(file, 1280);
           next.push({ id: nextAttachId(), kind: "image", name: file.name, src });
-        } else if (kind === "pdf") {
-          const extracted = await extractPdfText(file);
+        } else if (kind === "pdf" || kind === "docx") {
+          const extracted = await (kind === "pdf" ? extractPdfText(file) : extractDocxText(file));
           next.push({
             id: nextAttachId(),
-            kind: "pdf",
+            kind,
+            name: file.name,
+            text: extracted,
+            // Картинки из файла — то, чего нет в тексте. Фото-скан не трогаем:
+            // его содержание уже в разборе.
+            images: await extractAttachImages(file, kind),
+          });
+        } else if (kind === "doc") {
+          const extracted = await extractLegacyDoc(file);
+          next.push({
+            id: nextAttachId(),
+            kind: "docx",
             name: file.name,
             text: extracted,
           });
@@ -171,6 +185,9 @@ export default function NewNote() {
       if (titleMode === "ai") title = parsed.title || fallback;
       if (titleMode === "custom") title = customTitle.trim() || fallback;
 
+      // Firestore не примет документ больше 1 МБ: текст и конспект уже заняли
+      // часть места, картинкам остаётся остаток.
+      const spent = new Blob([parsed.text, JSON.stringify(parsed.summary || "")]).size;
       await createNote({
         subject_id: subjectId,
         title,
@@ -178,6 +195,7 @@ export default function NewNote() {
         plan: null,
         summary: parsed.summary,
         retelling: parsed.retelling,
+        images: capNoteImages(docs.flatMap((d) => d.images || []), 950_000 - spent),
       });
       navigate(-1);
     } catch (err) {
@@ -348,7 +366,8 @@ export default function NewNote() {
         <Plus size={16} /> Добавить файлы
       </button>
       <div style={{ color: t.sub, fontSize: 12, margin: "6px 4px 0", lineHeight: 1.4 }}>
-        Фото, PDF или текст (.txt, .md). PDF — с текстовым слоем (не скан).
+        Фото, PDF, Word (.docx) или текст (.txt, .md). PDF — с текстовым слоем (не скан).
+        Картинки из PDF и Word попадут в конспект отдельной вкладкой.
       </div>
 
       {photos.length > 0 && (
@@ -400,7 +419,8 @@ export default function NewNote() {
                     {a.name}
                   </div>
                   <div style={{ color: t.sub, fontSize: 12, marginTop: 2 }}>
-                    {a.kind === "pdf" ? "PDF" : "Текст"} · ~{chars.toLocaleString("ru-RU")} симв.
+                    {a.kind === "pdf" ? "PDF" : a.kind === "docx" ? "Word" : "Текст"} · ~{chars.toLocaleString("ru-RU")} симв.
+                    {a.images?.length ? ` · ${a.images.length} ${plural(a.images.length, ["картинка", "картинки", "картинок"])}` : ""}
                   </div>
                 </div>
                 {removeBtn(a.id, "Убрать файл")}

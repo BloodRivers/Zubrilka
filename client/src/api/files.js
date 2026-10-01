@@ -1,5 +1,9 @@
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { extractDocxMedia } from "./docx";
+import { pdfImagesFrom } from "./pdfImages";
+
+export { extractDocxText } from "./docx";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -8,10 +12,11 @@ const PDF_MAX_BYTES = 40 * 1024 * 1024;
 const PDF_MAX_PAGES = 250;
 
 const TEXT_EXT = new Set(["txt", "md", "markdown", "text", "csv", "log"]);
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 /**
  * @param {File} file
- * @returns {"image"|"pdf"|"text"|null}
+ * @returns {"image"|"pdf"|"text"|"docx"|"doc"|null}
  */
 export function classifyAttachFile(file) {
   const name = (file.name || "").toLowerCase();
@@ -22,6 +27,8 @@ export function classifyAttachFile(file) {
     return "image";
   }
   if (type === "application/pdf" || ext === "pdf") return "pdf";
+  if (ext === "docx" || type === DOCX_MIME) return "docx";
+  if (ext === "doc" || type === "application/msword") return "doc";
   if (
     type.startsWith("text/")
     || type === "application/json"
@@ -30,6 +37,11 @@ export function classifyAttachFile(file) {
     return "text";
   }
   return null;
+}
+
+/** Старый бинарный Word — не zip, читать нечем. */
+export async function extractLegacyDoc() {
+  throw new Error("Формат .doc не поддерживается — в Word: «Сохранить как» → .docx");
 }
 
 function readAsText(file) {
@@ -121,6 +133,29 @@ export async function extractTextFile(file) {
 
 const JPEG_DATA = /^data:image\/jpeg;base64,/;
 
+/** Сжать уже декодированную картинку (ImageBitmap, <img> или canvas) в JPEG data URL. */
+export async function scaledImageDataUrl(src, max) {
+  const w0 = src.width;
+  const h0 = src.height;
+  if (!w0 || !h0) throw new Error("Картинка с нулевым размером — не загрузилась");
+
+  const scale = Math.min(1, max / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * scale));
+  const h = Math.max(1, Math.round(h0 * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(src, 0, 0, w, h);
+  const out = canvas.toDataURL("image/jpeg", 0.8);
+  if (out.length < 5000 || !JPEG_DATA.test(out)) {
+    throw new Error("После сжатия картинка почти пустая — пропускаю её");
+  }
+  return out;
+}
+
 /**
  * Сжать фото в data URL (JPEG ~0.8) с ограничением по большей стороне.
  * Не читает файл целиком в строку: сразу декод по блобу — на телефонах
@@ -153,27 +188,83 @@ export async function downscaleImageFile(file, max) {
   }
 
   try {
-    const w0 = bmp ? bmp.width : img.width;
-    const h0 = bmp ? bmp.height : img.height;
-    if (!w0 || !h0) throw new Error("Фото с нулевым размером — не загрузилось");
-
-    const scale = Math.min(1, max / Math.max(w0, h0));
-    const w = Math.max(1, Math.round(w0 * scale));
-    const h = Math.max(1, Math.round(h0 * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(bmp || img, 0, 0, w, h);
-    if (bmp) bmp.close();
-    const out = canvas.toDataURL("image/jpeg", 0.8);
-    if (out.length < 5000 || !JPEG_DATA.test(out)) {
-      throw new Error("После сжатия фото почти пустое — попробуй другое");
-    }
-    return out;
+    return await scaledImageDataUrl(bmp || img, max);
   } finally {
+    if (bmp) bmp.close();
     if (url) URL.revokeObjectURL(url);
   }
+}
+
+// ponytail: картинки из файла храним в конспекте как data URL, поэтому лимит
+// 6 шт. и ~300 КБ суммарно (документ Firestore — 1 МБ). Если понадобится больше —
+// Cloud Storage со ссылками, а не base64 внутри note.
+const MAX_NOTE_IMAGES = 6;
+const MAX_NOTE_IMAGE_CHARS = 300_000;
+
+/** Обрезать список картинок до того, что влезет в документ конспекта. */
+export function capNoteImages(list, budget = MAX_NOTE_IMAGE_CHARS) {
+  const max = Math.min(budget, MAX_NOTE_IMAGE_CHARS);
+  const out = [];
+  let chars = 0;
+  for (const im of list || []) {
+    if (out.length >= MAX_NOTE_IMAGES || chars >= max) break;
+    if (!im?.src) continue;
+    chars += im.src.length;
+    out.push(im);
+  }
+  return out;
+}
+
+const MIME = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+};
+const picMime = (name) => MIME[(name.split(".").pop() || "").toLowerCase()] || "";
+
+/** Растр в canvas: то, что потом можно жать в JPEG. */
+function rasterToCanvas({ bitmap, pixels, width, height }) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (bitmap) {
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close?.();
+  } else {
+    ctx.putImageData(new ImageData(pixels, width, height), 0, 0);
+  }
+  return canvas;
+}
+
+/** Картинки вложения для конспекта: [{name, src}], с учётом лимитов. */
+export async function extractAttachImages(file, kind, maxSide = 900) {
+  let raw = [];
+  try {
+    if (kind === "docx") {
+      raw = await extractDocxMedia(file);
+    } else if (kind === "pdf") {
+      raw = file.size > PDF_MAX_BYTES ? [] : await pdfImagesFrom(new Uint8Array(await readAsArrayBuffer(file)));
+    }
+  } catch (e) {
+    console.warn("[files] images:", file?.name, e);
+    return [];
+  }
+
+  const out = [];
+  for (const item of raw) {
+    if (out.length >= MAX_NOTE_IMAGES) break;
+    try {
+      const src = item.bytes
+        ? await downscaleImageFile(new Blob([item.bytes], { type: picMime(item.name) }), maxSide)
+        : await scaledImageDataUrl(rasterToCanvas(item), maxSide);
+      out.push({ name: item.name || "", src });
+    } catch {
+      /* мелкая или битая — в конспект не тащим */
+    }
+  }
+  return capNoteImages(out);
 }

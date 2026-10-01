@@ -191,7 +191,7 @@ export async function getNote(id) {
   return snap.exists() ? { id, ...snap.data() } : null;
 }
 
-export async function createNote({ subject_id, title, text, plan, retelling, summary, image_ref }) {
+export async function createNote({ subject_id, title, text, plan, retelling, summary, image_ref, images }) {
   if (!subject_id) throw new Error("Не указан предмет");
   if (!title?.trim()) throw new Error("Не указано название конспекта");
   if (!text?.trim()) throw new Error("Нет текста конспекта");
@@ -210,11 +210,6 @@ export async function createNote({ subject_id, title, text, plan, retelling, sum
     }));
   }
 
-  if (!retelling?.trim()) {
-    const paragraphs = text.split(/\n{2,}/).filter((s) => s.trim().length > 20);
-    retelling = paragraphs[0]?.trim().slice(0, 500) || "";
-  }
-
   try {
     return await addDoc(collection(db, "notes"), {
       subject_id,
@@ -226,6 +221,7 @@ export async function createNote({ subject_id, title, text, plan, retelling, sum
       retelling: retelling || "",
       summary: summary || "",
       image_ref: image_ref || null,
+      images: images || [],
       pinned: false,
       public: false,
       published_at: null,
@@ -256,6 +252,7 @@ export async function copyNoteToSubject(note, subjectId) {
     retelling: note.retelling || "",
     summary: note.summary || null,
     image_ref: note.image_ref || null,
+    images: note.images || [],
   });
   return ref;
 }

@@ -285,8 +285,14 @@ function buildUserContent(prompt, imageUrls) {
 }
 
 function imageTokensFromUsage(usage) {
-  const d = usage?.prompt_tokens_details || {};
-  return d.image_tokens ?? d.image ?? usage?.image_tokens ?? null;
+  const d = usage?.prompt_tokens_details || usage?.promptTokensDetails || {};
+  return d.image_tokens ?? d.image ?? usage?.image_tokens ?? usage?.imageTokens ?? null;
+}
+
+/** Polza отдаёт то snake_case, то camelCase — берём оба. */
+function finishReasonOf(data) {
+  const choice = data?.choices?.[0];
+  return choice?.finish_reason ?? choice?.finishReason ?? null;
 }
 
 async function postChat(bodyObj) {
@@ -317,7 +323,7 @@ async function callPolza({
   system,
   prompt,
   imageDataUrl,
-  maxTokens = 8192,
+  maxTokens,
   name = "ai",
   jsonMode = false,
 }) {
@@ -339,6 +345,8 @@ async function callPolza({
       { role: "system", content: system },
       { role: "user", content: buildUserContent(prompt, imageUrls) },
     ],
+    // max_tokens не задаём — свой потолок генерации знает модель. undefined
+    // выкидывается из JSON сам, лимита от клиента не остаётся.
     max_tokens: maxTokens,
     temperature: 0.3,
     presence_penalty: 0.4,
@@ -378,7 +386,7 @@ async function callPolza({
       try {
         if (!data) throw new Error("Пустой/битый ответ Polza");
         const usage = data.usage || {};
-        const promptTokens = usage.prompt_tokens || 0;
+        const promptTokens = usage.prompt_tokens ?? usage.promptTokens ?? 0;
         const imageTokens = imageTokensFromUsage(usage);
         console.info("[ai]", name, MODEL, "ok", {
           imgs: imageUrls.length,
@@ -386,7 +394,7 @@ async function callPolza({
           pinned: Boolean(attempts[a].provider),
           prompt_tokens: promptTokens,
           image_tokens: imageTokens,
-          finish: data?.choices?.[0]?.finish_reason,
+          finish: finishReasonOf(data),
           cost_rub: usage.cost_rub ?? usage.cost,
           preview: raw.slice(0, 280),
         });
@@ -403,9 +411,20 @@ async function callPolza({
           }
         }
 
+        // Обрыв по потолку модели раньше проходил молча: JSON закрывался,
+        // а retelling/summary оставались пустыми. Повтор не поможет — режем один раз.
+        if (finishReasonOf(data) === "length") {
+          const e = new Error(
+            "Ответ модели оборвался по лимиту генерации — попробуй файл поменьше или разбей его на части"
+          );
+          e.noRetry = true;
+          throw e;
+        }
+
         let innerText = data?.choices?.[0]?.message?.content ?? "";
         if (!String(innerText).trim()) throw new Error("Модель вернула пустой ответ");
-        innerText = collapseRepeats(innerText);
+        // Схлопывание строк ломает JSON (режет абзацы по \n\n) — только для plain text.
+        if (!jsonMode) innerText = collapseRepeats(innerText);
         if (looksLoopy(innerText)) throw new Error("Модель зациклилась на повторах");
 
         pushLog({
@@ -419,8 +438,12 @@ async function callPolza({
           image_tokens: imageTokens,
           out: String(innerText).slice(0, 1500),
         });
+        // JSON разбираем тут, а не в aiJSON: битый JSON тогда попадает в
+        // уже оплаченный retry выше, а не вылетает ошибкой на первый ответ.
+        if (jsonMode) return { json: parseJSON(innerText), usage, model: MODEL, provider: data.provider };
         return { text: innerText, usage, model: MODEL, provider: data.provider };
       } catch (e) {
+        if (e?.noRetry) throw e;
         lastErr = e;
         emitStatus(`Сбой ответа — попытка ${tryN}/3…`);
         await new Promise((r) => setTimeout(r, tryN * 800));
@@ -438,8 +461,8 @@ export async function aiText(opts) {
 }
 
 export async function aiJSON(opts) {
-  const { text } = await callPolza({ ...opts, jsonMode: true });
-  return parseJSON(text);
+  const { json } = await callPolza({ ...opts, jsonMode: true });
+  return json;
 }
 
 /**
@@ -447,7 +470,7 @@ export async function aiJSON(opts) {
  * Для сбора слово-за-словом нужен живой поток — иначе пользователь видит только «Проверяю…».
  * Без retry: стрим уже начат, повтор молча сожжёт ещё один слот квоты.
  */
-export async function aiJSONStream({ system, prompt, onDelta, maxTokens = 2000, name = "ai-stream" }) {
+export async function aiJSONStream({ system, prompt, onDelta, maxTokens, name = "ai-stream" }) {
   const KEY = getApiKey();
   const MODEL = getModel();
   if (!KEY) throw new Error("Нет ключа Polza AI — вставь его в Настройках → Модель ИИ");
@@ -548,47 +571,96 @@ export async function assertVisionWorks(imageDataUrl) {
   return t;
 }
 
-function parseJSON(raw) {
-  const text = String(raw).trim();
-  if (!text) throw new Error("AI вернул пустой ответ");
-  const clean = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const candidates = [clean];
+/**
+ * JSON не допускает `\` перед обычным символом, а модель пишет LaTeX прямо в
+ * строках ответа: `80\%`, `$\$4,26$`, `\&`. Плюс сырые переводы строк там, где
+ * просили `\n`. Из-за одного такого символа падал весь ответ — и пересказ, и
+ * конспект пропадали молча. Лечим только недопустимые escape'ы; валидный JSON
+ * функция не трогает (её вызывают только после неудачного JSON.parse).
+ */
+function repairJSONStringEscapes(json) {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (!inString) {
+      if (ch === '"') inString = true;
+      out += ch;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      if ('"\\/bfnrtu'.includes(ch)) out += ch;
+      else if (ch === "\n" || ch === "\r") out += "n"; // перенос строки LaTeX
+      else if (ch === "\t") out += "t";
+      else out += `\\${ch}`; // \% \$ \& → \% \$ \&
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      out += ch;
+      continue;
+    }
+    if (ch === "\n") { out += "\\n"; continue; }
+    if (ch === "\r") continue;
+    if (ch === "\t") { out += "\\t"; continue; }
+    if (ch === '"') inString = false;
+    out += ch;
+  }
+  return out;
+}
 
-  // Gemini can wrap valid JSON in a short explanation or return more than one block.
-  // Find balanced JSON values without treating braces inside quoted strings as syntax.
-  for (let start = 0; start < clean.length; start++) {
-    if (clean[start] !== "{" && clean[start] !== "[") continue;
-    const stack = [];
-    let inString = false;
-    let escaped = false;
-    for (let i = start; i < clean.length; i++) {
-      const ch = clean[i];
-      if (inString) {
-        if (escaped) escaped = false;
-        else if (ch === "\\") escaped = true;
-        else if (ch === '"') inString = false;
+/** Текст от `индекса` до первой парной `}` — внешний объект, не вложенный. */
+function outermostObject(clean, index) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = index; i < clean.length; i++) {
+    const ch = clean[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") depth += 1;
+    else if (ch === "}" && --depth === 0) return clean.slice(index, i + 1);
+  }
+  return null;
+}
+
+function parseJSON(raw) {
+  const clean = String(raw).trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  if (!clean) throw new Error("AI вернул пустой ответ");
+
+  // Только внешний объект и никогда вложенный блок. Раньше при битом верхнем
+  // JSON парсер откатывался на первый вложившийся объект — и structureNote
+  // молча получал {title, body} вместо пересказа с конспектом: вкладка
+  // «Пересказ» исчезала, «Конспект» оставался пустым.
+  const start = clean.indexOf("{");
+  const candidates = [clean, start < 0 ? null : outermostObject(clean, start)];
+  for (const base of candidates) {
+    if (!base) continue;
+    for (const candidate of [base, repairJSONStringEscapes(base)]) {
+      let val;
+      try {
+        val = JSON.parse(candidate);
+      } catch {
         continue;
       }
-      if (ch === '"') {
-        inString = true;
-        continue;
-      }
-      if (ch === "{" || ch === "[") stack.push(ch);
-      else if (ch === "}" || ch === "]") {
-        const expected = ch === "}" ? "{" : "[";
-        if (stack.pop() !== expected) break;
-        if (!stack.length) {
-          candidates.push(clean.slice(start, i + 1));
-          break;
-        }
-      }
+      if (val && typeof val === "object" && !Array.isArray(val)) return val;
     }
   }
-
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch {}
-  }
-  throw new Error("Модель вернула невалидный JSON");
+  throw new Error(
+    "Модель вернула невалидный JSON — попробуй ещё раз"
+    + `\nОтвет начинается так: ${clean.slice(0, 200)}`
+  );
 }

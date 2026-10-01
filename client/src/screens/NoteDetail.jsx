@@ -6,6 +6,7 @@ import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import Accordion from "../components/Accordion";
 import Button from "../components/Button";
+import Modal from "../components/Modal";
 import Segmented from "../components/Segmented";
 import SharedAuthorBar from "../components/AuthorBar";
 import MathText from "../components/MathText";
@@ -48,7 +49,7 @@ function summaryToText(summary) {
       .map((s) => {
         const body = String(s?.body || s?.text || "").trim();
         if (!body) return "";
-        const title = String(s?.title || "").trim() || fallbackTitle(body);
+        const title = String(s?.title || "").trim() || fallbackTitle(body) || "Раздел";
         return `## ${title}\n\n${body}`;
       })
       .filter(Boolean)
@@ -130,9 +131,14 @@ function SummaryTree({ nodes, t }) {
 }
 
 function SummaryView({ summary, t }) {
-  const sections = useMemo(() => sectionsFromMarkdown(summaryToText(summary)), [summary]);
+  const { noteStyle } = useTheme();
+  const text = useMemo(() => summaryToText(summary), [summary]);
+  const sections = useMemo(() => sectionsFromMarkdown(text), [text]);
   const [open, setOpen] = useState(null);
-  if (!sections.length) return null;
+  // Заголовки: конспект целиком, без свёртки.
+  if (noteStyle === "headings") return <MarkdownText text={text} t={t} />;
+  // Без заголовков разобрать нечего — показываем Markdown как есть, а не пустоту.
+  if (!sections.length) return <MarkdownText text={text} t={t} />;
   return (
     <div>
       {sections.map((s, i) => (
@@ -153,6 +159,51 @@ function SummaryView({ summary, t }) {
       <div style={{ color: t.sub, fontSize: 13, marginTop: 14 }}>
         Конспект собран моделью по тексту. Если раздел кажется неполным — открой «Текст» и сравни с оригиналом.
       </div>
+    </div>
+  );
+}
+
+function ImageGallery({ images, t }) {
+  const [open, setOpen] = useState(null);
+  const current = open == null ? null : images[open];
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {images.map((im, n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => setOpen(n)}
+            style={{
+              padding: 0,
+              border: `1px solid ${t.border}`,
+              borderRadius: 14,
+              overflow: "hidden",
+              background: t.raised,
+              cursor: "pointer",
+            }}
+          >
+            <img
+              src={im.src}
+              alt={im.name || `Картинка ${n + 1}`}
+              loading="lazy"
+              style={{ width: "100%", display: "block", aspectRatio: "1 / 1", objectFit: "cover" }}
+            />
+          </button>
+        ))}
+      </div>
+      <div style={{ color: t.sub, fontSize: 13, marginTop: 14, lineHeight: 1.45 }}>
+        Картинки из прикреплённого файла — схемы, графики и формулы. Нажми, чтобы рассмотреть.
+      </div>
+      <Modal open={!!current} onClose={() => setOpen(null)} maxWidth={520} pad="10px">
+        {current && (
+          <img
+            src={current.src}
+            alt={current.name || "Картинка конспекта"}
+            style={{ width: "100%", display: "block", borderRadius: 14 }}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -226,6 +277,7 @@ export default function NoteDetail() {
     if (hasContent || normalizeSummary(note.summary).length) list.push({ v: "summary", label: "Конспект" });
     if (note.retelling?.trim()) list.push({ v: "retelling", label: "Пересказ" });
     if (note.text?.trim()) list.push({ v: "text", label: "Текст" });
+    if (note.images?.length) list.push({ v: "images", label: "Картинки", badge: note.images.length });
     list.push({ v: "tests", label: "Тесты", badge: tests.length });
     return list;
   }, [note, tests]);
@@ -351,6 +403,8 @@ export default function NoteDetail() {
           style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
         />
       )}
+
+      {tab === "images" && note.images?.length > 0 && <ImageGallery images={note.images} t={t} />}
 
       {tab === "tests" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

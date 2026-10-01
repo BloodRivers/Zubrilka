@@ -135,8 +135,7 @@ function buildNoteContext(notes) {
       return parts.join("\n\n");
     })
     .filter(Boolean)
-    .join("\n\n---\n\n")
-    .slice(0, 14000);
+    .join("\n\n---\n\n");
 }
 
 function buildTestSystem(modes, counts = DEFAULT_COUNTS) {
@@ -365,7 +364,6 @@ async function ocrFromPhotos(imageDataUrl) {
     system: SYSTEM_OCR,
     prompt: OCR_PROMPT,
     imageDataUrl,
-    maxTokens: 2500,
   });
   const draft = collapseRepeats(raw);
   if (draft.length < 30) {
@@ -377,9 +375,8 @@ async function ocrFromPhotos(imageDataUrl) {
     const fixed = await aiText({
       name: "ocr-proofread",
       system: SYSTEM_PROOFREAD,
-      prompt: `Черновой транскрипт:\n\n${draft.slice(0, 12000)}`,
+      prompt: `Черновой транскрипт:\n\n${draft}`,
       imageDataUrl,
-      maxTokens: 2500,
     });
     const corrected = collapseRepeats(fixed);
     return corrected.length >= 30 ? corrected : draft;
@@ -402,18 +399,16 @@ export async function structureNote(transcript, opts = {}) {
     throw new Error("Слишком мало текста для анализа — добавь файл, фото или вставь текст");
   }
 
-  // PDF/длинный текст: больше контекста для тем/плана; полный текст в JSON не просим
-  const promptLimit = keepSourceText || text.length > 10000 ? 80000 : 24000;
+  // PDF/длинный текст: полный текст в JSON не просим — экономим вывод.
+  // Вход и выход не режем: потолок генерации — лимит самой модели.
+  const big = keepSourceText || text.length > 10000;
   const structured = await aiJSON({
     name: "structure-note",
-    system: keepSourceText || text.length > 10000 ? SYSTEM_STRUCTURE_META : SYSTEM_STRUCTURE,
-    prompt:
-      `Собери JSON по этому транскрипту. Не добавляй ничего от себя.\n\n`
-      + text.slice(0, promptLimit),
-    maxTokens: keepSourceText || text.length > 10000 ? 6000 : 8000,
+    system: big ? SYSTEM_STRUCTURE_META : SYSTEM_STRUCTURE,
+    prompt: `Собери JSON по этому транскрипту. Не добавляй ничего от себя.\n\n${text}`,
   });
 
-  if (keepSourceText || text.length > 10000) {
+  if (big) {
     structured.text = text;
   } else {
     const modelText = collapseRepeats(structured.text || "");
@@ -435,7 +430,6 @@ export async function generateSummary(note) {
     name: "generate-summary",
     system: SYSTEM_SUMMARY,
     prompt: `Исходный материал:\n\n${source}`,
-    maxTokens: 6000,
   });
   const summary = normalizeSummary(raw?.summary);
   if (!summary.length) throw new Error("Модель не вернула конспект — попробуй ещё раз");
@@ -474,7 +468,6 @@ export async function generateTest(noteIds, modesOrType) {
     name: "generate-test",
     system: buildTestSystem(selected, counts),
     prompt: `Собери JSON только по материалу ниже. Режимы: ${selected.join(", ")}.\n\nКонспект:\n${text}`,
-    maxTokens: 6000,
   });
 
   const normalized = normalizeTestPayload(raw, selected, counts);
@@ -561,9 +554,8 @@ export function gradeWritten(noteText, questions, answers, onDelta) {
   return aiJSONStream({
     name: "grade-written",
     system: SYSTEM_GRADE,
-    prompt: `${list.join("\n\n")}\n\nКонспект:\n${String(noteText).slice(0, 12000)}`,
+    prompt: `${list.join("\n\n")}\n\nКонспект:\n${noteText}`,
     onDelta,
-    maxTokens: 2000,
   });
 }
 

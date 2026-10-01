@@ -10,9 +10,15 @@ import { updateUserProfile, getUserProfile } from "../api/firestore";
 import { enablePushNotifications } from "../api/push";
 import { setSfxEnabled, isSfxEnabled, onSfxChange } from "../sfx";
 import Switch from "../components/Switch";
+import Segmented from "../components/Segmented";
 import { GhostInline } from "../components/Ghost";
 import { checkForAppUpdate } from "../swUpdate";
 import { useAlert } from "../components/Alert";
+
+const NOTE_STYLE_OPTS = [
+  { v: "accordion", label: "Аккордеон" },
+  { v: "headings", label: "Заголовки" },
+];
 
 async function persistKey(key) {
   const trimmed = (key || "").trim();
@@ -87,7 +93,7 @@ const input = (t) => ({
 });
 
 export default function Settings({ isGuest }) {
-  const { pref, setPref, t, theme } = useTheme();
+  const { pref, setPref, t, theme, noteStyle, setNoteStyle } = useTheme();
   const { alert } = useAlert();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -267,6 +273,29 @@ export default function Settings({ isGuest }) {
         <span style={{ color: t.text, fontSize: 15 }}>Звуки интерфейса</span>
         <Switch on={sfxOn} />
       </button>
+
+      <div
+        style={{
+          ...row(t),
+          flexDirection: "column",
+          alignItems: "stretch",
+          gap: 10,
+          marginTop: 8,
+        }}
+      >
+        <span style={{ color: t.text, fontSize: 15 }}>Вид конспекта</span>
+        <Segmented
+          options={NOTE_STYLE_OPTS}
+          value={noteStyle}
+          onChange={setNoteStyle}
+          labelStyle={{ fontSize: 13 }}
+        />
+        <span style={{ color: t.sub, fontSize: 12, lineHeight: 1.4 }}>
+          {noteStyle === "accordion"
+            ? "Разделы свёрнуты в аккордеоны — открываются по нажатию."
+            : "Весь конспект подряд: заголовки, текст, таблицы и формулы без свёртки."}
+        </span>
+      </div>
 
       <div style={sectionTitle(t, { marginTop: 24 })}>Модель ИИ</div>
 
