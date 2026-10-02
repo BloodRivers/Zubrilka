@@ -8,6 +8,7 @@ import PrepositionsTrainer from "./PrepositionsTrainer";
 import ParticlesTrainer from "./ParticlesTrainer";
 import RootsTrainer from "./RootsTrainer";
 import SpeechStylesTrainer from "./SpeechStylesTrainer";
+import PrePriTrainer from "./PrePriTrainer";
 
 export default function Trainer() {
   const { slug, level } = useParams();
@@ -19,5 +20,6 @@ export default function Trainer() {
   if (slug === "particles") return <ParticlesTrainer level={level} />;
   if (slug === "roots") return <RootsTrainer />;
   if (slug === "speech-styles") return <SpeechStylesTrainer />;
+  if (slug === "prepri") return <PrePriTrainer />;
   return <StressTrainer />;
 }

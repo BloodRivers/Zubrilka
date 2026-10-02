@@ -122,6 +122,7 @@ export const TRAINER_LIST = [
   { id: "particles", title: "Разряды частиц", sub: "Смысловые и формообразующие частицы — выбери уровень", egeSubject: "russian" },
   { id: "roots", title: "Корни", sub: "Чередующиеся корни гер/гор, бер/бир и другие — введи пропущенную букву", egeSubject: "russian" },
   { id: "speech-styles", title: "Стили речи", sub: "Определи стиль по цели, ситуации и языковым признакам", egeSubject: "russian" },
+  { id: "prepri", title: "Правописание ПРЕ- и ПРИ-", sub: "Словник задания 10 — введи пропущенную приставку", egeSubject: "russian" },
 ];
 
 export function Stat({ label, value, tint }) {

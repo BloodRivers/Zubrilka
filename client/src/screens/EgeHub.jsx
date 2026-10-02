@@ -12,6 +12,7 @@ const EGE_TASK_GROUPS = [
   { task: "4", title: "Ударения", ids: ["stress"] },
   { task: "5", title: "Паронимы", ids: ["paronyms"] },
   { task: "9", title: "Корни", ids: ["roots"] },
+  { task: "10", title: "Приставки ПРЕ- и ПРИ-", ids: ["prepri"] },
 ];
 
 export const EGE_SUBJECTS = [
