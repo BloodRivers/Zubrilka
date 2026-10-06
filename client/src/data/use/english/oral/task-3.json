@@ -1,0 +1,125 @@
+{
+  "task": 3,
+  "title": "Интервью",
+  "sub": "Ответь интервьюеру на вопросы о теме. Каждый вопрос звучит один раз, ответ — 20 секунд",
+  "formulation": "Imagine that you are participating in a school Internet forum. The interviewer is going to ask you questions about the topic. Give full answers to the questions.",
+  "answerSeconds": 20,
+  "warn": 5,
+  "max": 5,
+  "criteria": [
+    {
+      "name": "Вопрос 1",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Дан полный и точный ответ на заданный вопрос (не менее 2 фраз); возможные фонетические, лексические и грамматические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Ответ на вопрос не дан ИЛИ содержание ответа не соответствует вопросу ИЛИ ответ содержит менее 2 фраз ИЛИ фонетические и лексические ошибки препятствуют коммуникации (в том числе когда ответ носит характер набора слов)"
+        }
+      ]
+    },
+    {
+      "name": "Вопрос 2",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Дан полный и точный ответ на заданный вопрос (не менее 2 фраз); возможные фонетические, лексические и грамматические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Ответ на вопрос не дан ИЛИ содержание ответа не соответствует вопросу ИЛИ ответ содержит менее 2 фраз ИЛИ фонетические и лексические ошибки препятствуют коммуникации (в том числе когда ответ носит характер набора слов)"
+        }
+      ]
+    },
+    {
+      "name": "Вопрос 3",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Дан полный и точный ответ на заданный вопрос (не менее 2 фраз); возможные фонетические, лексические и грамматические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Ответ на вопрос не дан ИЛИ содержание ответа не соответствует вопросу ИЛИ ответ содержит менее 2 фраз ИЛИ фонетические и лексические ошибки препятствуют коммуникации (в том числе когда ответ носит характер набора слов)"
+        }
+      ]
+    },
+    {
+      "name": "Вопрос 4",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Дан полный и точный ответ на заданный вопрос (не менее 2 фраз); возможные фонетические, лексические и грамматические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Ответ на вопрос не дан ИЛИ содержание ответа не соответствует вопросу ИЛИ ответ содержит менее 2 фраз ИЛИ фонетические и лексические ошибки препятствуют коммуникации (в том числе когда ответ носит характер набора слов)"
+        }
+      ]
+    },
+    {
+      "name": "Вопрос 5",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Дан полный и точный ответ на заданный вопрос (не менее 2 фраз); возможные фонетические, лексические и грамматические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Ответ на вопрос не дан ИЛИ содержание ответа не соответствует вопросу ИЛИ ответ содержит менее 2 фраз ИЛИ фонетические и лексические ошибки препятствуют коммуникации (в том числе когда ответ носит характер набора слов)"
+        }
+      ]
+    }
+  ],
+  "introStart": "Hello everybody! It’s Teenagers Round the World Channel. Our guest today is a teenager from Russia and we are going to discuss ",
+  "introEnd": ". We’d like to know our guest’s point of view on this issue. Please answer five questions. So, let’s get started.",
+  "finisher": "Thank you very much for your interview.",
+  "variants": [
+    {
+      "id": "3-01",
+      "title": "Вариант 1",
+      "theme": "sports",
+      "audio": "/oral/task_3_audio/3-01",
+      "questions": [
+        "What region of Russia do you live in? Are there any prominent sports teams there?",
+        "What else could you tell about your region?",
+        "What kinds of sports are popular in Russia? Which aren't?",
+        "What kind of sports is your favourite? Why?",
+        "Are your friends interested in sports? If so, what kinds of sports?"
+      ]
+    },
+    {
+      "id": "3-02",
+      "title": "Вариант 2",
+      "theme": "hobbies",
+      "audio": "/oral/task_3_audio/3-02",
+      "questions": [
+        "Could you tell us what is unusual about Russia?",
+        "What kinds of hobbies do people usually have in your country?",
+        "What is your first hobby? Do you still do it?",
+        "How do you spend your free time now?",
+        "What hobby would you like to pick up in the future? Why?"
+      ]
+    },
+    {
+      "id": "3-03",
+      "title": "Вариант 3",
+      "theme": "friends",
+      "audio": "/oral/task_3_audio/3-03",
+      "questions": [
+        "How do you get along with your peers?",
+        "What are the benefits of friendship?",
+        "Where did you meet your best friend? How long have you known each other?",
+        "How do you communicate with your friends?",
+        "How do you spend time together?"
+      ]
+    }
+  ]
+}

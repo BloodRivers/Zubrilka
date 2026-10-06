@@ -2,10 +2,22 @@
 import assert from "node:assert/strict";
 import { ORAL_TASKS, oralTaskByNumber, pickRandomVariant } from "../src/useOral.js";
 
-assert.equal(ORAL_TASKS.length, 2, "пока что 1-е и 2-е задания");
+assert.equal(ORAL_TASKS.length, 3, "1-е, 2-е и 3-е задания");
+
+const t3 = oralTaskByNumber(3);
+assert.ok(t3.answerSeconds > 0, "3-е задание: нет answerSeconds");
+assert.equal(typeof t3.warn, "number");
+assert.ok(t3.introStart && t3.introEnd && t3.finisher, "3-е задание: нет констант вступления/финишера");
+assert.ok(t3.variants.length >= 1, "3-е задание: нет вариантов");
+for (const v of t3.variants) {
+  assert.ok(v.id && v.title, "3-е задание: битый вариант");
+  assert.ok(typeof v.theme === "string" && v.theme, "3-е задание: вариант без темы");
+  assert.ok(Array.isArray(v.questions) && v.questions.length >= 1, "3-е задание: вариант без вопросов");
+}
 
 for (const task of ORAL_TASKS) {
   assert.ok(task.title && task.sub && task.formulation, `задание ${task.task}: нет title/sub/formulation`);
+  if (task.task === 3) continue;
   assert.ok(Array.isArray(task.phases) && task.phases.length >= 2, `задание ${task.task}: мало фаз`);
   for (const p of task.phases) {
     assert.ok(p.seconds > 0, `задание ${task.task}: фаза «${p.label}» без секунд`);
@@ -49,4 +61,4 @@ assert.equal(pickRandomVariant([{ id: "a" }, { id: "b" }], ["a"]).id, "b");
 assert.ok(["a", "b"].includes(pickRandomVariant([{ id: "a" }, { id: "b" }], ["a", "b"]).id), "после круга снова все в пуле");
 assert.equal(pickRandomVariant([], []), undefined);
 
-console.log(`ok: ${ORAL_TASKS.length} задания, ${t1.variants.length + t2.variants.length} вариантов`);
+console.log(`ok: ${ORAL_TASKS.length} задания, ${t1.variants.length + t2.variants.length + t3.variants.length} вариантов`);

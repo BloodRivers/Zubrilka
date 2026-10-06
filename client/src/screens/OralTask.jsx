@@ -10,11 +10,39 @@ import { transcribeRecording } from "../api/ai";
 import { gradeOral } from "../oralGrade";
 import { computeMetrics } from "../oralMetrics";
 import { saveOralResult, addOralDone } from "../oralResults";
+import { saveAudio, getAudio } from "../audioStore";
 import { Square, SkipForward } from "lucide-react";
 
 const mmss = (s) => {
   s = Math.max(0, Math.floor(s));
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+};
+
+let voicesLoaded;
+const ensureVoices = () =>
+  voicesLoaded ||
+  (voicesLoaded = new Promise((res) => {
+    if (speechSynthesis?.getVoices().length) return res();
+    const to = setTimeout(res, 1200);
+    speechSynthesis?.addEventListener?.("voiceschanged", function h() {
+      clearTimeout(to);
+      res();
+    });
+  }));
+
+const pickVoice = () => {
+  const en = speechSynthesis
+    ?.getVoices()
+    .filter((v) => v.lang.toLowerCase().startsWith("en"));
+  if (!en?.length) return null;
+  return (
+    en.find((v) => /natural/i.test(v.name) && /gb|uk/i.test(v.lang)) ||
+    en.find((v) => /^google uk/i.test(v.name)) ||
+    en.find((v) => /natural/i.test(v.name)) ||
+    en.find((v) => /^google/i.test(v.name)) ||
+    en.find((v) => /samantha|karen|daniel|moira/i.test(v.name)) ||
+    en[0]
+  );
 };
 
 function AdImage({ src }) {
@@ -65,19 +93,155 @@ export default function OralTask() {
   const [transcript, setTranscript] = useState("");
   const [grade, setGrade] = useState(null);
 
+  const isInterview = task?.task === 3;
+  const [ivStage, setIvStage] = useState(null); // null | intro | q | a | finisher | done
+  const [ivIdx, setIvIdx] = useState(0);
+  const [ivLines, setIvLines] = useState([]); // {kind:"intro"|"q"|"finisher", i?}
+  const [qShowed, setQShowed] = useState({});
+  const answerDoneRef = useRef(null);
+  const pendingSayRef = useRef(null);
+  const cancelIvRef = useRef(false);
+  const sfxCtxRef = useRef(null);
+  const ivAudioRef = useRef(null);
+
+  const sfx = () => {
+    try {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      const ctx = sfxCtxRef.current || (sfxCtxRef.current = new Ctor());
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.type = "sine";
+      o.frequency.setValueAtTime(660, t);
+      o.frequency.setValueAtTime(880, t + 0.09);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      o.start(t);
+      o.stop(t + 0.21);
+    } catch {}
+  };
+
+  const sayText = (text) =>
+    new Promise((resolve) => {
+      pendingSayRef.current = resolve;
+      const done = () => {
+        pendingSayRef.current = null;
+        resolve();
+      };
+      const parts =
+        text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ||
+        [text];
+      if (!parts.length) return done();
+      let idx = 0;
+      const speakNext = () => {
+        if (!pendingSayRef.current || idx >= parts.length) return done();
+        const u = new SpeechSynthesisUtterance(parts[idx]);
+        const voice = pickVoice();
+        u.voice = voice || null;
+        u.lang = voice?.lang || "en-GB";
+        u.rate = 0.95;
+        u.pitch = 1;
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(watchdog);
+          idx++;
+          speakNext();
+        };
+        const watchdog = setTimeout(() => {
+          speechSynthesis.cancel();
+          finish();
+        }, Math.max(parts[idx].length * 80, 2000) + 1500);
+        u.onend = finish;
+        u.onerror = finish;
+        speechSynthesis.speak(u);
+      };
+      ensureVoices().then(() => {
+        if (!pendingSayRef.current) return done();
+        speakNext();
+      });
+    });
+
+  /** Предзаписанная реплика (mp3 на статике), при отсутствии — браузерный TTS. */
+  const playPhrase = (text, url) => {
+    if (!url) return sayText(text);
+    return new Promise((resolve) => {
+      const a = ivAudioRef.current || (ivAudioRef.current = new Audio());
+      pendingSayRef.current = resolve;
+      const done = () => {
+        if (!pendingSayRef.current) return;
+        pendingSayRef.current = null;
+        resolve();
+      };
+      a.onended = done;
+      a.onerror = done;
+      a.src = url;
+      a.play().catch(done);
+    });
+  };
+
+  const finishAnswer = () => {
+    if (answerDoneRef.current) {
+      const resolve = answerDoneRef.current;
+      answerDoneRef.current = null;
+      resolve();
+    }
+  };
+
+  const beginInterview = async () => {
+    cancelIvRef.current = false;
+    const intro = task.introStart + v.theme + task.introEnd;
+    const url = (name) => (v.audio ? `${v.audio}/${name}` : "");
+    setIvStage("intro");
+    setIvLines([{ kind: "intro" }]);
+    setTimer(null);
+    await playPhrase(intro, url("intro.mp3"));
+    if (cancelIvRef.current) return;
+    for (let i = 0; i < v.questions.length; i++) {
+      setIvStage("q");
+      setIvIdx(i);
+      setIvLines((prev) => [...prev, { kind: "q", i }]);
+      await playPhrase(v.questions[i], url(`${i}.mp3`));
+      if (cancelIvRef.current) return;
+      sfx();
+      setIvStage("a");
+      await new Promise((res) => {
+        answerDoneRef.current = res;
+      });
+      if (cancelIvRef.current) return;
+      sfx();
+    }
+    setIvStage("finisher");
+    setIvLines((prev) => [...prev, { kind: "finisher" }]);
+    await playPhrase(task.finisher, url("finisher.mp3"));
+    if (cancelIvRef.current) return;
+    setTimer(null);
+    setIvStage("done");
+    setEnded(true);
+  };
+
   useEffect(() => {
     setScreenTitle(task && v ? `Задание ${task.task}. ${v.title}` : null);
     return () => setScreenTitle(null);
   }, [task, v]);
 
   useEffect(() => {
-    return () => streamRef.current?.getTracks().forEach((tr) => tr.stop());
+    return () => {
+      cancelIvRef.current = true;
+      speechSynthesis.cancel();
+      ivAudioRef.current?.pause();
+      streamRef.current?.getTracks().forEach((tr) => tr.stop());
+    };
   }, []);
 
   useEffect(() => {
-    setQuizActive(phaseIdx != null);
+    setQuizActive((phaseIdx != null || (isInterview && ivStage != null)) && !ended);
     return () => setQuizActive(false);
-  }, [phaseIdx]);
+  }, [phaseIdx, ivStage, ended, isInterview]);
 
   useEffect(() => {
     if (phaseIdx == null) {
@@ -106,8 +270,14 @@ export default function OralTask() {
   }, [phaseIdx, task]);
 
   useEffect(() => {
-    if (phaseIdx == null || !task.phases[phaseIdx].mic) return undefined;
-    const key = `use-oral-${task.task}-${v.id}-rec`;
+    const micKey =
+      phaseIdx != null && task.phases[phaseIdx].mic
+        ? `use-oral-${task.task}-${v.id}-rec`
+        : isInterview && ivStage === "a"
+          ? `use-oral-${task.task}-${v.id}-rec-${ivIdx}`
+          : null;
+    if (!micKey) return undefined;
+    const key = micKey;
     let stream;
     let cancelled = false;
     (async () => {
@@ -132,7 +302,7 @@ export default function OralTask() {
           streamRef.current = null;
           if (blob.size) {
             try {
-              localStorage.setItem(key, await blobToDataURL(blob));
+              await saveAudio(key, blob);
               setRecSaved(true);
             } catch {
               setRecSaved(false);
@@ -150,23 +320,52 @@ export default function OralTask() {
         recorderRef.current.stop();
       }
     };
-  }, [phaseIdx, task, v.id]);
+  }, [phaseIdx, task, v.id, isInterview, ivStage, ivIdx]);
+
+  useEffect(() => {
+    if (!isInterview || ivStage !== "a") return undefined;
+    const total = task.answerSeconds;
+    const endAt = Date.now() + total * 1000;
+    const tick = () => {
+      const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      setTimer({ label: `Вопрос ${ivIdx + 1}`, total, left, warn: task.warn ?? 3 });
+      if (left <= 0) {
+        clearInterval(id);
+        finishAnswer();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInterview, ivStage, ivIdx, task]);
 
   if (!task || !v) {
     return <div style={{ color: t.sub, fontSize: 14, padding: "10px 0" }}>Задание не найдено.</div>;
   }
 
-  const begin = async () => {
+  const begin = () => {
     setMic("requesting");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((tr) => tr.stop());
-      setMic("ready");
+    if (isInterview) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then(() => setMic("ready"))
+        .catch(() => setMic("denied"));
       setEnded(false);
-      setPhaseIdx(0);
-    } catch {
-      setMic("denied");
+      beginInterview();
+      return;
     }
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((tr) => tr.stop());
+        setMic("ready");
+        setEnded(false);
+        setPhaseIdx(0);
+      } catch {
+        setMic("denied");
+      }
+    })();
   };
 
   const finishRecording = () => {
@@ -182,23 +381,44 @@ export default function OralTask() {
   const runCheck = async () => {
     setCheckError("");
     const criteria = task.criteria;
+    let metrics = null;
     try {
       setChecking("transcribe");
-      const dataUrl = localStorage.getItem(recordKey);
-      if (!dataUrl) throw new Error("Запись не найдена — перезапиши вариант");
-      const res = await transcribeRecording(dataUrl);
-      const metrics = v.content.text
-        ? computeMetrics({
-            words: res.words,
-            duration: res.duration,
-            sourceText: v.content.text,
-            transcript: res.text,
-          })
-        : null;
-      setTranscript(res.text);
+      let transcriptText;
+      const recDataUrl = async (key) => {
+        const rec = await getAudio(key);
+        if (!rec) return null;
+        return typeof rec === "string" ? rec : await blobToDataURL(rec);
+      };
+
+      if (isInterview) {
+        const parts = [];
+        for (let i = 0; i < v.questions.length; i++) {
+          const dataUrl = await recDataUrl(`use-oral-${task.task}-${v.id}-rec-${i}`);
+          if (!dataUrl) throw new Error(`Запись ответа ${i + 1} не найдена — перезапиши вариант`);
+          const res = await transcribeRecording(dataUrl);
+          parts.push(`Вопрос ${i + 1} — ${v.questions[i]}\nОтвет: ${res.text}`);
+        }
+        transcriptText = parts.join("\n\n");
+        setTranscript(transcriptText);
+      } else {
+        const dataUrl = await recDataUrl(recordKey);
+        if (!dataUrl) throw new Error("Запись не найдена — перезапиши вариант");
+        const res = await transcribeRecording(dataUrl);
+        metrics = v.content.text
+          ? computeMetrics({
+              words: res.words,
+              duration: res.duration,
+              sourceText: v.content.text,
+              transcript: res.text,
+            })
+          : null;
+        transcriptText = res.text;
+        setTranscript(res.text);
+      }
       if (!criteria) throw new Error("Критерии для этого задания ещё не добавлены");
       setChecking("grade");
-      const g = await gradeOral(res.text, criteria, metrics);
+      const g = await gradeOral(transcriptText, criteria, metrics);
       setGrade(g);
       saveOralResult({
         task: task.task,
@@ -214,9 +434,11 @@ export default function OralTask() {
   };
 
   const running = phaseIdx != null;
+  const started = running || (isInterview && ivStage != null);
   const micPhase = running && task.phases[phaseIdx].mic;
+  const activeMic = micPhase || (isInterview && ivStage === "a");
 
-  const contentBlock = v.content.questions ? (
+  const contentBlock = v.content?.questions ? (
     <div style={{ marginTop: 18 }}>
       <div
         style={{
@@ -267,33 +489,94 @@ export default function OralTask() {
       <div style={{ color: t.sub, fontSize: 12, fontWeight: 700, letterSpacing: 0.04, marginBottom: 8 }}>
         TEXT TO READ ALOUD
       </div>
-      <div style={{ color: t.text, fontSize: 16, lineHeight: 1.65 }}>{v.content.text}</div>
+      <div style={{ color: t.text, fontSize: 16, lineHeight: 1.65 }}>{v.content?.text}</div>
     </div>
   );
 
   return (
-    <div style={{ paddingBottom: running ? 120 : 0 }}>
-      {!ended && (
-        <>
-          {running && (
-            <div style={{ color: t.sub, fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
-              {task.phases[phaseIdx].label}
-            </div>
-          )}
-          <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.55 }}>
-            {v.content.task || task.formulation}
+    <div style={{ paddingBottom: timer ? 120 : 0 }}>
+      {!ended &&
+        (isInterview ? (
+          <div
+            style={{
+              background: t.raised,
+              border: `1px solid ${t.border}`,
+              borderRadius: 16,
+              padding: "14px 16px",
+            }}
+          >
+            {ivLines.map((line, li) =>
+              line.kind === "q" ? (
+                <div
+                  key={li}
+                  className="swap"
+                  onClick={() =>
+                    setQShowed((p) => ({ ...p, [line.i]: !p[line.i] }))
+                  }
+                  style={{
+                    marginTop: li ? 12 : 0,
+                    paddingTop: li ? 12 : 0,
+                    borderTop: li ? `1px solid ${t.border}` : "none",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  <div style={{ color: t.sub, fontSize: 12, fontWeight: 700, letterSpacing: 0.04, marginBottom: 8 }}>
+                    ВОПРОС {line.i + 1}
+                  </div>
+                  <div
+                    style={{
+                      color: t.text,
+                      fontSize: 16,
+                      lineHeight: 1.55,
+                      filter: qShowed[line.i] ? "none" : "blur(6px)",
+                    }}
+                  >
+                    {v.questions[line.i]}
+                  </div>
+                  <div style={{ color: t.sub, fontSize: 13, marginTop: 8 }}>
+                    {ivStage === "a" && ivIdx === line.i &&
+                      `Отвечай — микрофон уже слушает, ${task.answerSeconds} сек.`}
+                  </div>
+                </div>
+              ) : (
+                <div key={li} className="swap" style={{ marginTop: li ? 12 : 0 }}>
+                  <div style={{ color: t.sub, fontSize: 12, fontWeight: 700, letterSpacing: 0.04, marginBottom: 8 }}>
+                    ИНТЕРВЬЮЕР — {line.kind === "intro" ? "ВСТУПЛЕНИЕ" : "ЗАВЕРШЕНИЕ"}
+                  </div>
+                  <div style={{ color: t.text, fontSize: 16, lineHeight: 1.55 }}>
+                    {line.kind === "intro" ? task.introStart + v.theme + task.introEnd : task.finisher}
+                  </div>
+                </div>
+              )
+            )}
+            {ivStage == null && (
+              <div style={{ color: t.sub, fontSize: 13, marginTop: 8 }}>
+                Тема: {v.theme}. Тебя ждут {v.questions.length} вопросов — ответ по {task.answerSeconds} секунд.
+              </div>
+            )}
           </div>
-          {contentBlock}
-        </>
-      )}
+        ) : (
+          <>
+            {running && (
+              <div style={{ color: t.sub, fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
+                {task.phases[phaseIdx].label}
+              </div>
+            )}
+            <div style={{ color: t.sub, fontSize: 14, lineHeight: 1.55 }}>
+              {v.content?.task || task.formulation}
+            </div>
+            {contentBlock}
+          </>
+        ))}
 
       {ended && (
         <div>
           <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>
-            Задание завершено. {recSaved ? "Запись сохранена." : "Запись не сохранилась."}
+            {isInterview ? "Интервью завершено." : `Задание завершено. ${recSaved ? "Запись сохранена." : "Запись не сохранилась."}`}
           </div>
 
-          {recSaved && !transcript && !checking && (
+          {(isInterview || recSaved) && !transcript && !checking && (
             <div style={{ display: "flex", justifyContent: "center", marginTop: 18 }}>
               <button
                 className="press"
@@ -310,7 +593,7 @@ export default function OralTask() {
                   cursor: "pointer",
                 }}
               >
-                Проверить чтение с ИИ
+                {isInterview ? "Проверить ответы с ИИ" : "Проверить чтение с ИИ"}
               </button>
             </div>
           )}
@@ -419,7 +702,7 @@ export default function OralTask() {
         </div>
       )}
 
-      {running && timer && (
+      {timer && !ended && (
         createPortal(
         <div
           style={{
@@ -432,7 +715,7 @@ export default function OralTask() {
             pointerEvents: "none",
           }}
         >
-          {micPhase && (
+          {activeMic && (
             <div style={{ marginBottom: 10 }}>
               <MicVisualizer stream={streamRef.current} height={48} />
             </div>
@@ -451,7 +734,7 @@ export default function OralTask() {
                 <div
                   style={{
                     flex: 1,
-                    height: 8,
+                    height: 12,
                     borderRadius: 999,
                     background: t.border,
                     overflow: "hidden",
@@ -514,18 +797,27 @@ export default function OralTask() {
                 <SkipForward size={18} strokeWidth={2.5} color={t.text} />
               </button>
             )}
-            {micPhase && (
+            {activeMic && (
               <button
-                aria-label="Закончить запись"
+                aria-label={isInterview ? "Закончить ответ" : "Закончить запись"}
                 className="press"
-                onClick={() =>
+                onClick={() => {
+                  if (isInterview) {
+                    alert("Закончить этот ответ и перейти дальше?", {
+                      title: "Закончить ответ?",
+                      danger: true,
+                      confirmLabel: "Дальше",
+                      onConfirm: finishAnswer,
+                    });
+                  } else {
                     alert("Остановить запись и завершить задание?", {
                       title: "Завершить запись?",
                       danger: true,
                       confirmLabel: "Остановить",
                       onConfirm: finishRecording,
-                    })
+                    });
                   }
+                }}
                 style={{
                   width: 46,
                   height: 46,
@@ -549,7 +841,7 @@ export default function OralTask() {
         )
       )}
 
-      {!running && !ended &&
+      {!started && !ended &&
         createPortal(
           <div
             style={{

@@ -1,7 +1,8 @@
 import ORAL_TASK_1 from "./data/use/english/oral/task-1.json" with { type: "json" };
 import ORAL_TASK_2 from "./data/use/english/oral/task-2.json" with { type: "json" };
+import ORAL_TASK_3 from "./data/use/english/oral/task-3.json" with { type: "json" };
 
-export const ORAL_TASKS = [ORAL_TASK_1, ORAL_TASK_2];
+export const ORAL_TASKS = [ORAL_TASK_1, ORAL_TASK_2, ORAL_TASK_3];
 
 export function oralTaskByNumber(n) {
   return ORAL_TASKS.find((task) => task.task === n);
