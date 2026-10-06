@@ -7,7 +7,7 @@ const LABELS = {
   wordPlaceholder: "вот, только, даже…",
   categoryPlaceholder: "указательные",
   empty: "Разряды частиц усвоены уверенно.",
-  backTo: "/ege/russian",
+  backTo: "/use/russian",
 };
 
 export default function ParticlesTrainer({ level }) {

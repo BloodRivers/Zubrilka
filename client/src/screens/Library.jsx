@@ -10,7 +10,8 @@ import { GraduationCap } from "lucide-react";
 import { listPublicNotes, listPublicTests } from "../api/firestore";
 import { testSizeLabel } from "../api/backend";
 import { setReturnTo } from "../nav";
-import { EGE_SUBJECTS } from "./EgeHub";
+import { fuzzyScore } from "../fuzzy";
+import { USE_SUBJECTS } from "./UseHub";
 
 function testModeChips(test) {
   const modes = Array.isArray(test?.modes) ? test.modes : [];
@@ -89,15 +90,11 @@ export default function Library() {
   }, [notes, tests]);
 
   const items = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const match = (title, author) => {
-      if (!needle) return true;
-      return `${title || ""} ${author || ""}`.toLowerCase().includes(needle);
-    };
+    const needle = q.trim();
+    const score = (title, author) => fuzzyScore(`${title || ""} ${author || ""}`, needle);
     const subjOk = (name) => !subject || (name || "").trim() === subject;
 
     const noteItems = notes
-      .filter((n) => match(n.title, n.author_name) && subjOk(n.subject_name))
       .map((n) => ({
         kind: "note",
         id: n.id,
@@ -109,9 +106,10 @@ export default function Library() {
         chips: ["Конспект"],
         badge: "",
         at: n.published_at,
-      }));
+        score: score(n.title, n.author_name),
+      }))
+      .filter((it) => it.score >= 0 && subjOk(it.subject));
     const testItems = tests
-      .filter((x) => match(x.title, x.author_name) && subjOk(x.subject_name))
       .map((x) => ({
         kind: "test",
         id: x.id,
@@ -123,7 +121,14 @@ export default function Library() {
         chips: testModeChips(x),
         badge: testScoreBadge(x),
         at: x.published_at,
-      }));
+        score: score(x.title, x.author_name),
+      }))
+      .filter((it) => it.score >= 0 && subjOk(it.subject));
+
+    if (needle) {
+      noteItems.sort((a, b) => b.score - a.score);
+      testItems.sort((a, b) => b.score - a.score);
+    }
 
     if (tab === "notes") return noteItems;
     if (tab === "tests") return testItems;
@@ -157,7 +162,7 @@ export default function Library() {
           options={[
             { v: "notes", label: "Конспекты" },
             { v: "tests", label: "Тесты" },
-            { v: "ege", label: "ЕГЭ" },
+            { v: "use", label: "ЕГЭ" },
           ]}
           value={tab}
           onChange={setTab}
@@ -193,22 +198,22 @@ export default function Library() {
         options={[
           { v: "notes", label: "Конспекты" },
           { v: "tests", label: "Тесты" },
-          { v: "ege", label: "ЕГЭ" },
+          { v: "use", label: "ЕГЭ" },
         ]}
         value={tab}
         onChange={setTab}
         style={{ marginBottom: 10 }}
       />
 
-      {tab === "ege" ? (
-        EGE_SUBJECTS.filter((s) => !q.trim() || `${s.title} ${s.sub}`.toLowerCase().includes(q.trim().toLowerCase())).map((s, i) => (
+      {tab === "use" ? (
+        USE_SUBJECTS.filter((s) => fuzzyScore(`${s.title} ${s.sub}`, q) >= 0).map((s, i) => (
           <ListRow
             key={s.id}
             idx={i}
             icon={<GraduationCap size={20} color={t.text} strokeWidth={2} />}
             title={s.title}
             sub={s.sub}
-            onClick={() => navigate(`/ege/${s.id}`)}
+            onClick={() => navigate(`/use/${s.id}`)}
           />
         ))
       ) : (

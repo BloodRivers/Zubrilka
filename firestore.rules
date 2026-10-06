@@ -46,5 +46,17 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.user_id == request.auth.uid;
     }
+
+    match /oral_results/{id} {
+      allow read: if signedIn() && resource.data.user_id == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.user_id == request.auth.uid;
+    }
+
+    match /oral_progress/{id} {
+      allow read: if signedIn() && resource.data.user_id == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.user_id == request.auth.uid;
+    }
   }
 }

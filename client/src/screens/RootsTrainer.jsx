@@ -217,7 +217,7 @@ export default function RootsTrainer() {
           wrongItems={[...wrongRef.current].map((w) => ({ key: w, label: w, badge: "повторить" }))}
           emptyMsg="Все слова усвоены уверенно."
           onRetry={start}
-          onBack={trainer?.egeSubject ? () => navigate(`/ege/${trainer.egeSubject}`) : null}
+          onBack={trainer?.useSubject ? () => navigate(`/use/${trainer.useSubject}`) : null}
           backLabel="Вернуться к ЕГЭ"
         />
       ) : (

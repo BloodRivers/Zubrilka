@@ -20,7 +20,9 @@ import UpdateBanner from "./components/UpdateBanner";
 import Login from "./screens/Login";
 import Subjects from "./screens/Subjects";
 import Trainer from "./screens/Trainer";
-import EgeHub, { EGE_SUBJECTS } from "./screens/EgeHub";
+import UseHub, { USE_SUBJECTS } from "./screens/UseHub";
+import OralBank from "./screens/OralBank";
+import OralTask from "./screens/OralTask";
 import SubjectHub from "./screens/SubjectHub";
 import NewNote from "./screens/NewNote";
 import NoteDetail from "./screens/NoteDetail";
@@ -56,8 +58,9 @@ function titleFor(path) {
   const t = TRAINER_LIST.find((x) => path.endsWith(x.id) || path.startsWith(`/trainer/${x.id}/`));
   return t?.title || "Тренажёр";
 }
-  if (/^\/ege\//.test(path)) {
-  const s = EGE_SUBJECTS.find((x) => path.endsWith(x.id));
+  if (/^\/use\/english\/oral\//.test(path)) return "Устная часть";
+if (/^\/use\//.test(path)) {
+  const s = USE_SUBJECTS.find((x) => path.startsWith(`/use/${x.id}`));
   return s?.title || "ЕГЭ";
 }
   if (path === "/login") return "";
@@ -492,6 +495,7 @@ function Shell() {
   }, [user, isGuest]);
 
   const legalPath = /^\/(terms|privacy|cookies)(\/|$)/.test(location.pathname);
+  const inOralTask = /^\/use\/english\/oral\/\d+\/[\w-]+$/.test(location.pathname);
 
   const acceptConsent = () => {
     if (!user) return;
@@ -747,7 +751,7 @@ function Shell() {
             <TopBar
               title={screenTitle || titleFor(location.pathname)}
               onBack={
-                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/ege\/|\/(terms|privacy|cookies)/.test(location.pathname)
+                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/use\/|\/(terms|privacy|cookies)/.test(location.pathname)
                   ? async () => {
                       if (!(await confirmLeaveQuiz())) return;
                       const dest = backOf(location.pathname, location.state);
@@ -764,7 +768,9 @@ function Shell() {
               <Route path="/" element={<Subjects />} />
               <Route path="/trainer/:slug/:level" element={<Trainer />} />
               <Route path="/trainer/:slug" element={<Trainer />} />
-              <Route path="/ege/:slug" element={<EgeHub />} />
+              <Route path="/use/:slug" element={<UseHub />} />
+              <Route path="/use/english/oral/:task/:variant" element={<OralTask />} />
+              <Route path="/use/english/oral/:task" element={<OralBank />} />
               <Route path="/account" element={isGuest ? <GuestBlock /> : <Account />} />
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings isGuest={isGuest} />} />
@@ -783,7 +789,7 @@ function Shell() {
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ScreenTransition>
-          {user && !legalPath && <BottomNav confirmLeave={confirmLeaveQuiz} />}
+          {user && !legalPath && !inOralTask && <BottomNav confirmLeave={confirmLeaveQuiz} />}
           {user && !legalPath && <UpdateBanner />}
         </div>
         {consentPending && !legalPath && (

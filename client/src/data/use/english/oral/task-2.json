@@ -1,0 +1,125 @@
+{
+  "task": 2,
+  "title": "Условный диалог-расспрос",
+  "sub": "Задай 4 прямых вопроса по рекламе: 1,5 мин на подготовку и 1,5 мин на ответ",
+  "formulation": "Imagine that you are choosing a service or an event. Study the advertisement. You are considering taking it up and now you would like to get more information. In 1.5 minutes you are to ask four direct questions to find out the following.",
+  "max": 4,
+  "phases": [
+    {
+      "label": "Подготовка",
+      "seconds": 90,
+      "mic": false,
+      "warn": 10
+    },
+    {
+      "label": "Ответ",
+      "seconds": 90,
+      "mic": true,
+      "warn": 10
+    }
+  ],
+  "criteria": [
+    {
+      "name": "Вопрос 1",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Вопрос по содержанию отвечает поставленной задаче, имеет правильную грамматическую форму прямого вопроса; возможные фонетические и лексические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Вопрос не задан, или заданный вопрос по содержанию не отвечает поставленной задаче И/ИЛИ не имеет правильной грамматической формы прямого вопроса И/ИЛИ фонетические и лексические ошибки препятствуют коммуникации"
+        }
+      ]
+    },
+    {
+      "name": "Вопрос 2",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Вопрос по содержанию отвечает поставленной задаче, имеет правильную грамматическую форму прямого вопроса; возможные фонетические и лексические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Вопрос не задан, или заданный вопрос по содержанию не отвечает поставленной задаче И/ИЛИ не имеет правильной грамматической формы прямого вопроса И/ИЛИ фонетические и лексические ошибки препятствуют коммуникации"
+        }
+      ]
+    },
+    {
+      "name": "Вопрос 3",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Вопрос по содержанию отвечает поставленной задаче, имеет правильную грамматическую форму прямого вопроса; возможные фонетические и лексические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Вопрос не задан, или заданный вопрос по содержанию не отвечает поставленной задаче И/ИЛИ не имеет правильной грамматической формы прямого вопроса И/ИЛИ фонетические и лексические ошибки препятствуют коммуникации"
+        }
+      ]
+    },
+    {
+      "name": "Вопрос 4",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Вопрос по содержанию отвечает поставленной задаче, имеет правильную грамматическую форму прямого вопроса; возможные фонетические и лексические погрешности не затрудняют восприятие"
+        },
+        {
+          "points": 0,
+          "text": "Вопрос не задан, или заданный вопрос по содержанию не отвечает поставленной задаче И/ИЛИ не имеет правильной грамматической формы прямого вопроса И/ИЛИ фонетические и лексические ошибки препятствуют коммуникации"
+        }
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "2-01",
+      "title": "Вариант 1",
+      "content": {
+        "ad": "/oral/task_2_pictures/2-01.png",
+        "task": "You are considering visiting the city and now you would like to get more information. In 1.5 minutes you are to ask four direct questions to find out the following.",
+        "questions": [
+          "Dates for departures",
+          "Hotel facilities",
+          "If breakfast is included",
+          "Number of city tours"
+        ]
+      }
+    },
+    {
+      "id": "2-02",
+      "title": "Вариант 2",
+      "content": {
+        "ad": "/oral/task_2_pictures/2-02.png",
+        "kicker": "Family weekend on the lake!",
+        "task": "You are considering going on the family weekend and now you'd like to get more information. In 1.5 minutes you are to ask four direct questions to find out about the following:",
+        "questions": [
+          "Locations",
+          "Accommodation",
+          "Price for the weekend for a family of three",
+          "Fishing equipment rental"
+        ]
+      }
+    },
+    {
+      "id": "2-03",
+      "title": "Вариант 3",
+      "content": {
+        "ad": "/oral/task_2_pictures/2-03.jpg",
+        "kicker": "Special order cakes for any occasion!",
+        "task": "You are considering ordering a cake from this company and now you'd like to get more information. In 1.5 minutes you are to ask four direct questions to find out about the following:",
+        "questions": [
+          "Maximum size",
+          "Cake fillings",
+          "Delivery",
+          "Discounts"
+        ]
+      }
+    }
+  ]
+}

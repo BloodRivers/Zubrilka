@@ -7,7 +7,7 @@ const LABELS = {
   wordPlaceholder: "так, там, сюда…",
   categoryPlaceholder: "указательные",
   empty: "Разряды наречий усвоены уверенно.",
-  backTo: "/ege/russian",
+  backTo: "/use/russian",
 };
 
 export default function AdverbsTrainer({ level }) {

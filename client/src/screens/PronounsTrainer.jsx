@@ -7,7 +7,7 @@ const LABELS = {
   wordPlaceholder: "мой, твой, наш…",
   categoryPlaceholder: "притяжательные",
   empty: "Разряды местоимений усвоены уверенно.",
-  backTo: "/ege/russian",
+  backTo: "/use/russian",
 };
 
 export default function PronounsTrainer({ level }) {

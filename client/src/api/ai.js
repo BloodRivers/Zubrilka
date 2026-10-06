@@ -18,6 +18,8 @@ const LOG_CAP = 40;
 const API_BASE = "https://polza.ai/api/v1/chat/completions";
 const BALANCE_API = "https://polza.ai/api/v1/balance";
 const STORAGE_UPLOAD = "https://polza.ai/api/v1/storage/upload";
+const TRANSCRIBE_API = "https://polza.ai/api/v1/audio/transcriptions";
+const WHISPER_MODEL = "openai/whisper-1";
 
 function usageDayKey(d = new Date()) {
   const y = d.getFullYear();
@@ -545,6 +547,53 @@ export async function aiJSONStream({ system, prompt, onDelta, maxTokens, name = 
 
   pushLog({ ts: Date.now(), name, model: MODEL, ok: true, out: full.slice(0, 1500) });
   return parseJSON(full);
+}
+
+/** Транскрипция аудиозаписи через Whisper (Polza, OpenAI-совместимый endpoint). */
+export async function transcribeRecording(dataUrl) {
+  const key = getApiKey();
+  if (!key) throw new Error("Нет ключа Polza AI — вставь его в Настройках → Модель ИИ");
+  await reserveAiSlot();
+  emitStatus("Расшифровываю запись…");
+
+  let res;
+  try {
+    res = await fetch(TRANSCRIBE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: WHISPER_MODEL,
+        file: dataUrl,
+        language: "en",
+        prompt: "Transcribe the words exactly as spoken, without correcting grammar or word forms.",
+        response_format: "verbose_json",
+        timestamp_granularities: ["word"],
+      }),
+    });
+  } catch (err) {
+    throw new Error(networkHint(err));
+  }
+  const raw = await res.text();
+  let data = null;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.message || `Polza Whisper ${res.status}`;
+    pushLog({ ts: Date.now(), name: "whisper", model: WHISPER_MODEL, ok: false, out: msg });
+    throw new Error(msg);
+  }
+  const text = String(data?.text || "").trim();
+  if (!text) {
+    pushLog({ ts: Date.now(), name: "whisper", model: WHISPER_MODEL, ok: false, out: "пустая расшифровка" });
+    throw new Error("Whisper вернул пустую расшифровку");
+  }
+  const words = Array.isArray(data?.words) ? data.words : [];
+  const duration = Number(data?.duration) || 0;
+  pushLog({ ts: Date.now(), name: "whisper", model: WHISPER_MODEL, ok: true, out: `${text.slice(0, 1500)} (words=${words.length}, ${duration}s)` });
+  return { text, words, duration };
 }
 
 /** Жёсткая проверка: модель обязана подтвердить, что видит фото. */

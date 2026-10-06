@@ -7,7 +7,7 @@ const LABELS = {
   wordPlaceholder: "и, но, или…",
   categoryPlaceholder: "сочинительные",
   empty: "Разряды союзов усвоены уверенно.",
-  backTo: "/ege/russian",
+  backTo: "/use/russian",
 };
 
 export default function ConjunctionsTrainer({ level }) {

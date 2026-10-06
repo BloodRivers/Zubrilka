@@ -7,7 +7,7 @@ const LABELS = {
   wordPlaceholder: "в, на, для…",
   categoryPlaceholder: "временные",
   empty: "Разряды предлогов усвоены уверенно.",
-  backTo: "/ege/russian",
+  backTo: "/use/russian",
 };
 
 export default function PrepositionsTrainer({ level }) {

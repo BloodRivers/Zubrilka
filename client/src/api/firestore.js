@@ -423,6 +423,42 @@ function testTypeOk(t) {
 }
 
 /** Все тесты текущего пользователя. */
+/** Результат устного задания ЕГЭ (last write wins per task+variant). */
+export async function saveOralResult({ task, variant_id, score, max }) {
+  const u = uid();
+  return setDoc(doc(db, "oral_results", `${u}_${task}_${variant_id}`), {
+    user_id: u,
+    task: Number(task),
+    variant_id,
+    score: Number(score) || 0,
+    max: Number(max) || 0,
+    created_at: serverTimestamp(),
+  });
+}
+
+export async function listOralResults() {
+  const q = query(collection(db, "oral_results"), where("user_id", "==", uid()));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** Прогресс устных заданий: список пройденных id вариантов на (пользователь, задание). */
+export async function loadOralDone(task) {
+  const u = uid();
+  const snap = await getDoc(doc(db, "oral_progress", `${u}_${task}`));
+  return Array.isArray(snap.data()?.done_ids) ? snap.data().done_ids : [];
+}
+
+export async function markOralDone(task, ids) {
+  const u = uid();
+  return setDoc(doc(db, "oral_progress", `${u}_${task}`), {
+    user_id: u,
+    task: Number(task),
+    done_ids: [...ids],
+    updated_at: serverTimestamp(),
+  });
+}
+
 export async function listOwnedTests() {
   const q = query(collection(db, "tests"), where("owner_id", "==", uid()));
   const snap = await getDocs(q);

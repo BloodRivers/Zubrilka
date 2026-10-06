@@ -175,7 +175,7 @@ export default function SpeechStylesTrainer() {
           wrongItems={[...wrongRef.current].map((title) => ({ key: title, label: title, badge: "повторить" }))}
           emptyMsg="Стили речи различаются уверенно."
           onRetry={start}
-          onBack={trainer?.egeSubject ? () => navigate(`/ege/${trainer.egeSubject}`) : null}
+          onBack={trainer?.useSubject ? () => navigate(`/use/${trainer.useSubject}`) : null}
           backLabel="Вернуться к ЕГЭ"
         />
       ) : (

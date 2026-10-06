@@ -113,16 +113,16 @@ const WORD_BANK = RAW_WORDS.map(parseWord);
 const TOTAL = WORD_BANK.length;
 
 export const TRAINER_LIST = [
-  { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную", egeSubject: "russian" },
-  { id: "paronyms", title: "Паронимы", sub: "Словник ЕГЭ — выбери слово по смыслу контекста", egeSubject: "russian" },
-  { id: "pronouns", title: "Разряды местоимений", sub: "Личные, возвратное, притяжательные и другие разряды — выбери уровень", egeSubject: "russian" },
-  { id: "adverbs", title: "Разряды наречий", sub: "Указательные, вопросительные, относительные и другие разряды — выбери уровень", egeSubject: "russian" },
-  { id: "conjunctions", title: "Разряды союзов", sub: "Сочинительные, подчинительные и другие союзы — выбери уровень", egeSubject: "russian" },
-  { id: "prepositions", title: "Разряды предлогов", sub: "По структуре, производности и значению — выбери уровень", egeSubject: "russian" },
-  { id: "particles", title: "Разряды частиц", sub: "Смысловые и формообразующие частицы — выбери уровень", egeSubject: "russian" },
-  { id: "roots", title: "Корни", sub: "Чередующиеся корни гер/гор, бер/бир и другие — введи пропущенную букву", egeSubject: "russian" },
-  { id: "speech-styles", title: "Стили речи", sub: "Определи стиль по цели, ситуации и языковым признакам", egeSubject: "russian" },
-  { id: "prepri", title: "Правописание ПРЕ- и ПРИ-", sub: "Словник задания 10 — введи пропущенную приставку", egeSubject: "russian" },
+  { id: "stress", title: "Тренажёр ударений", sub: "Орфоэпический словник ЕГЭ — выбери ударную гласную", useSubject: "russian" },
+  { id: "paronyms", title: "Паронимы", sub: "Словник ЕГЭ — выбери слово по смыслу контекста", useSubject: "russian" },
+  { id: "pronouns", title: "Разряды местоимений", sub: "Личные, возвратное, притяжательные и другие разряды — выбери уровень", useSubject: "russian" },
+  { id: "adverbs", title: "Разряды наречий", sub: "Указательные, вопросительные, относительные и другие разряды — выбери уровень", useSubject: "russian" },
+  { id: "conjunctions", title: "Разряды союзов", sub: "Сочинительные, подчинительные и другие союзы — выбери уровень", useSubject: "russian" },
+  { id: "prepositions", title: "Разряды предлогов", sub: "По структуре, производности и значению — выбери уровень", useSubject: "russian" },
+  { id: "particles", title: "Разряды частиц", sub: "Смысловые и формообразующие частицы — выбери уровень", useSubject: "russian" },
+  { id: "roots", title: "Корни", sub: "Чередующиеся корни гер/гор, бер/бир и другие — введи пропущенную букву", useSubject: "russian" },
+  { id: "speech-styles", title: "Стили речи", sub: "Определи стиль по цели, ситуации и языковым признакам", useSubject: "russian" },
+  { id: "prepri", title: "Правописание ПРЕ- и ПРИ-", sub: "Словник задания 10 — введи пропущенную приставку", useSubject: "russian" },
 ];
 
 export function Stat({ label, value, tint }) {
@@ -261,7 +261,7 @@ export default function StressTrainer() {
           wrongItems={[...wrongWordsRef.current].map((w) => ({ key: w, label: w.toLowerCase(), badge: "повторить" }))}
           emptyMsg="Орфоэпические нормы усвоены уверенно."
           onRetry={start}
-          onBack={trainer.egeSubject ? () => navigate(`/ege/${trainer.egeSubject}`) : null}
+          onBack={trainer.useSubject ? () => navigate(`/use/${trainer.useSubject}`) : null}
           backLabel="Вернуться к ЕГЭ"
         />
       ) : (

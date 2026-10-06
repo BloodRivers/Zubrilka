@@ -1,0 +1,60 @@
+{
+  "task": 1,
+  "title": "Чтение текста",
+  "sub": "Прочитай текст вслух: 1,5 мин на подготовку и 1,5 мин на чтение с микрофоном",
+  "max": 1,
+  "formulation": "Imagine that you are preparing a project with your friend. You have found some interesting material for the presentation and you want to read this text to your friend. You have 1.5 minutes to read the text silently, then be ready to read it out aloud. You will not have more than 1.5 minutes to read it.",
+  "phases": [
+    {
+      "label": "Чтение про себя",
+      "seconds": 90,
+      "mic": false,
+      "warn": 10
+    },
+    {
+      "label": "Чтение вслух",
+      "seconds": 90,
+      "mic": true,
+      "warn": 10
+    }
+  ],
+  "criteria": [
+    {
+      "name": "Фонетическая сторона речи",
+      "max": 1,
+      "levels": [
+        {
+          "points": 1,
+          "text": "Речь воспринимается легко: необоснованные паузы отсутствуют; фразовое ударение и интонационные контуры, произношение слов — без нарушений нормы; допускается не более 5 фонетических ошибок, в том числе 1–2 ошибки, искажающие смысл"
+        },
+        {
+          "points": 0,
+          "text": "Речь воспринимается с трудом из-за большого количества неестественных пауз, запинок, неверной расстановки ударений и ошибок в произношении слов ИЛИ сделано 5 фонетических ошибок ИЛИ сделано 3 и более фонетические ошибки, искажающие смысл"
+        }
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "1-01",
+      "title": "Вариант 1",
+      "content": {
+        "text": "The human body changes as it ages. The peak time for the human body is thought to be around the age of thirty. The body has an amazing capacity to renew, but cells can only divide a limited number of times. Thus, as we get older, our ability to repair damaged body parts decreases. Among the typical symptoms of ageing is the hair loss, poor eyesight and hearing and wrinkles. The hair growth slows down, and the hair becomes thin and weak. As for the eyesight, the eye muscles become less flexible, which makes focusing on a range of distances more difficult. The cells of the inner ear are very delicate. They get damaged or die over time. The skin cells produce less collagen, and wrinkles form. However, it's not all bad. Today people live much longer than they used to live in the past. Modern scientists are doing everything to slow down the complex processes of human ageing."
+      }
+    },
+    {
+      "id": "1-02",
+      "title": "Вариант 2",
+      "content": {
+        "text": "If you want to think and live green, the first thing you should reconsider is how you use water. Water shortages are a big problem all over the world. So, it is important to get serious about saving water. Check if there is any leak and fix it as you may be losing a lot of water because of it. There are also many lifestyle changes you can introduce to save more water. Don't run the tap when you brush your teeth. It's also a good idea to install a special water-saving shower head. You may also shorten your time in the shower and prefer showers to baths. If you are going to use a dishwasher or a washing machine, make sure it's full. It will also help you to save water and energy. You can use only cold water to wash your linen and collect grey water for watering plants. Finally, a lot of water is wasted in the kitchen while cooking or rinsing dishes, so install special devices to control the use of water in the kitchen."
+      }
+    },
+    {
+      "id": "1-03",
+      "title": "Вариант 3",
+      "content": {
+        "text": "Being with other people is definitely a key part of happiness. There is a broad agreement among happiness researchers and scientists that social relations are essential for people's happiness. Certainly, basic living standards are essential for well-being too. Still, after the baseline has been made, happiness varies more with quality of human relationships than income. People have a basic need to feel connected with others, and close, caring bonds with other people play a major part in our motivation and behaviour. We are social creatures, and the importance of this is clearly seen when one compares the satisfaction people feel in relationships with their overall satisfaction with life. The most important social relationships appear to be the ones where you experience things together with others, sharing thoughts and feelings as well as giving and receiving support."
+      }
+    }
+  ]
+}
