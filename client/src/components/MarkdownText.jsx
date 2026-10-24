@@ -212,7 +212,7 @@ function Inline({ nodes, t, k }) {
             );
           case "code":
             return (
-              <code key={key} style={{ background: t.raised, border: `1px solid ${t.border}`, borderRadius: 6, padding: "2px 5px", fontSize: "0.92em" }}>
+              <code key={key} style={{ background: t.raised, border: `1px solid ${t.border}`, borderRadius: 6, padding: "2px 5px", fontSize: "0.92em", fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}>
                 {n.value}
               </code>
             );
@@ -262,13 +262,38 @@ function List({ items, t, k }) {
 }
 
 function Table({ headers, rows, t }) {
+  const lastCol = headers.length - 1;
   return (
     <div style={{ overflowX: "auto", margin: "10px 0" }}>
-      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "separate",
+          borderSpacing: 0,
+          borderRadius: 16,
+          overflow: "hidden",
+          border: `1px solid ${t.border}`,
+          background: t.surface,
+        }}
+      >
         <thead>
           <tr>
             {headers.map((h, i) => (
-              <th key={i} style={{ border: `1px solid ${t.border}`, background: t.raised, color: t.text, fontWeight: 700, padding: "8px 10px", textAlign: "left" }}>
+              <th
+                key={i}
+                style={{
+                  textAlign: "left",
+                  padding: "10px 14px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                  color: t.sub,
+                  background: t.raised,
+                  borderBottom: `1px solid ${t.border}`,
+                  borderRight: i === lastCol ? "none" : `1px solid ${t.border}`,
+                }}
+              >
                 <Inline nodes={parseInline(h)} t={t} k={`th${i}`} />
               </th>
             ))}
@@ -278,7 +303,18 @@ function Table({ headers, rows, t }) {
           {rows.map((r, ri) => (
             <tr key={ri}>
               {r.map((c, ci) => (
-                <td key={ci} style={{ border: `1px solid ${t.border}`, color: t.sub, padding: "8px 10px" }}>
+                <td
+                  key={ci}
+                  style={{
+                    padding: "10px 14px",
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: t.text,
+                    verticalAlign: "top",
+                    borderBottom: ri === rows.length - 1 ? "none" : `1px solid ${t.border}`,
+                    borderRight: ci === lastCol ? "none" : `1px solid ${t.border}`,
+                  }}
+                >
                   <Inline nodes={parseInline(c)} t={t} k={`td${ri}-${ci}`} />
                 </td>
               ))}
@@ -305,7 +341,7 @@ export default function MarkdownText({ text, t, style }) {
             );
           case "para":
             return (
-              <div key={k} style={{ color: t.text, lineHeight: 1.55, margin: "8px 0", whiteSpace: "pre-wrap" }}>
+              <div key={k} style={{ color: t.text, lineHeight: 1.55, margin: "8px 0", whiteSpace: "pre-line", wordBreak: "break-word" }}>
                 <Inline nodes={parseInline(b.text)} t={t} k={k} />
               </div>
             );

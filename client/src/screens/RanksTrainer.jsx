@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ListChecks, Tag, ScanSearch, Keyboard } from "lucide-react";
+import { ListChecks, Tag, ScanSearch, Keyboard, MessageSquareText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
 import { shuffle } from "../utils";
@@ -80,10 +80,58 @@ function makeOdd(catId, catMap, items) {
   return { type: "odd", catId, words: shuffle([...main, dist]), answer: dist };
 }
 
-function buildQueue(level, categories, catMap, items) {
+function buildItemsAll(categories) {
+  const items = [];
+  for (const category of categories) {
+    for (const word of category.words) {
+      const existing = items.find((item) => item.word === word);
+      if (existing) {
+        existing.cats = [...new Set([...existing.cats, category.id])];
+        continue;
+      }
+      items.push({ word, cats: [category.id] });
+    }
+  }
+  return items;
+}
+
+function buildDescQuestions(categories) {
+  const structure = { simple: "простой", compound: "сложный", composite: "составной" };
+  const deriv = { nonderived: "непроизводный", "noun-derived": "производный от сущ.", "adverb-derived": "производный от наречия", "verbal-derived": "отглагольный" };
+
+  const catById = Object.fromEntries(categories.map((c) => [c.id, c]));
+  const items = buildItemsAll(categories);
+
+  const seen = new Set();
+  const questions = [];
+
+  for (const item of items) {
+    const parts = [];
+    for (const cid of item.cats) {
+      if (structure[cid]) parts.push(structure[cid]);
+      if (deriv[cid]) parts.push(deriv[cid]);
+    }
+    for (const cid of item.cats) {
+      const cat = catById[cid];
+      if (cat && cat.group === "По значению") parts.push(cat.title.toLowerCase());
+    }
+    if (!parts.length) continue;
+    const desc = [...new Set(parts)].sort().join(", ");
+    if (seen.has(desc)) continue;
+    seen.add(desc);
+    questions.push({ type: "type-desc", desc });
+  }
+
+  return shuffle(questions);
+}
+
+function buildQueue(level, categories, catMap, items, descItems = []) {
   if (level === "pick") return shuffle(categories.map((category) => makePick(category.id, catMap, items)));
   if (level === "name") return shuffle(items).map((item) => makeName(item, categories));
   if (level === "odd") return shuffle(categories.filter((category) => category.words.length >= 3).map((category) => makeOdd(category.id, catMap, items)).filter(Boolean));
+  if (level === "desc") {
+    return buildDescQuestions(categories);
+  }
   const typed = categories.map((category) => ({ type: "type-word", catId: category.id }));
   const named = shuffle(items).slice(0, 12).map((item) => ({ type: "type-cat", word: item.word, cats: item.cats }));
   return shuffle([...typed, ...named]);
@@ -96,7 +144,7 @@ function catInline(id, catMap) {
 
 let SEQ = 1;
 
-export default function RanksTrainer({ level, categories, ambiguous = {}, categoryNames, slug, labels, notes = [] }) {
+export default function RanksTrainer({ level, categories, ambiguous = {}, categoryNames, slug, labels, notes = [], theory, descItems = [] }) {
   const { t } = useTheme();
   const navigate = useNavigate();
   const catMap = Object.fromEntries(categories.map((category) => [category.id, category]));
@@ -118,8 +166,8 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
   const levels = [
     { id: "pick", icon: ListChecks, title: `${capitalize(labels.plural)} по разряду`, sub: `Выбери все ${labels.plural}, относящиеся к указанному разряду` },
     { id: "name", icon: Tag, title: `Разряд по ${labels.singular}`, sub: `Укажи разряд предложенного ${labels.singular}` },
-    { id: "odd", icon: ScanSearch, title: "Найди лишнее", sub: `В ряду ${labels.plural} найди слово из чужого разряда` },
     { id: "type", icon: Keyboard, title: "Пиши вручную", sub: `Впиши разряд или ${labels.plural} без подсказок` },
+    ...(slug === "prepositions" || descItems.length ? [{ id: "desc", icon: MessageSquareText, title: "По описанию", sub: "По характеристикам напиши подходящий предлог" }] : []),
   ];
 
   useEffect(() => {
@@ -143,7 +191,7 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
 
   const start = (selectedLevel) => {
     setTab("train");
-    queueRef.current = buildQueue(selectedLevel, categories, catMap, items);
+    queueRef.current = buildQueue(selectedLevel, categories, catMap, items, descItems);
     totalRef.current = queueRef.current.length;
     wrongRef.current = new Set();
     setStreak(0);
@@ -170,10 +218,31 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
     }
   };
 
+  const descToCats = (desc) => {
+    const d = String(desc || "").toLowerCase();
+    const res = new Set();
+    if (d.includes("простой")) res.add("simple");
+    if (d.includes("сложный")) res.add("compound");
+    if (d.includes("составной")) res.add("composite");
+    if (d.includes("непроизводный")) res.add("nonderived");
+    if (d.includes("производный от сущ")) res.add("noun-derived");
+    if (d.includes("производный от наречия")) res.add("adverb-derived");
+    if (d.includes("отглагольный")) res.add("verbal-derived");
+    for (const c of categories) {
+      if (c.group === "По значению" && d.includes(c.title.toLowerCase())) res.add(c.id);
+    }
+    return [...res];
+  };
+
   const wrongLabel = (question) => {
     if (question.type === "pick") return `${catMap[question.catId].title}: ${question.answer.join(", ")}`;
     if (question.type === "name" || question.type === "type-cat") return question.word;
     if (question.type === "odd") return `лишнее — «${question.answer}»`;
+    if (question.type === "type-desc") {
+      const req = descToCats(question.desc);
+      const all = items.filter((i) => req.every((r) => i.cats.includes(r))).map((i) => i.word);
+      return [...new Set(all)].join(", ");
+    }
     return catMap[question.catId].title;
   };
 
@@ -197,6 +266,13 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
     } else if (question.type === "type-word") {
       correct = gradeTypedWords(input, catMap[question.catId].words);
       explain = `Правильный ответ: ${catMap[question.catId].words.join(", ")}`;
+    } else if (question.type === "type-desc") {
+      const req = descToCats(question.desc);
+      const w = norm(input);
+      const item = items.find((i) => norm(i.word) === w);
+      correct = !!(item && req.length && req.every((r) => item.cats.includes(r)));
+      const all = items.filter((i) => req.every((r) => i.cats.includes(r))).map((i) => i.word);
+      explain = `Правильный ответ: ${[...new Set(all)].join(", ")}`;
     } else {
       const accepted = norm(input);
       correct = question.cats.some((catId) => categoryNames[catId].includes(accepted));
@@ -254,28 +330,32 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
     return (
       <div style={{ paddingTop: 4 }}>
         {renderTop()}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-          {categories.map((category) => (
-            <div key={category.id} style={{ borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, padding: "18px 18px 14px" }}>
-              {category.group && <div style={{ color: t.sub, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>{category.group}</div>}
-              <div style={{ color: t.text, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{category.title}</div>
-              <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>{category.desc}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {category.words.map((word) => (
-                  <span key={word} style={{ fontSize: 13, fontWeight: 600, color: t.text, border: `1px solid ${t.border}`, background: t.raised, padding: "5px 12px", borderRadius: 999 }}>
-                    {word}
-                  </span>
-                ))}
+        {theory ? (
+          theory
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
+            {categories.map((category) => (
+              <div key={category.id} style={{ borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, padding: "18px 18px 14px" }}>
+                {category.group && <div style={{ color: t.sub, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>{category.group}</div>}
+                <div style={{ color: t.text, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{category.title}</div>
+                <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>{category.desc}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {category.words.map((word) => (
+                    <span key={word} style={{ fontSize: 13, fontWeight: 600, color: t.text, border: `1px solid ${t.border}`, background: t.raised, padding: "5px 12px", borderRadius: 999 }}>
+                      {word}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-          {notes.map((note) => (
-            <div key={note.title} style={{ borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, padding: "18px 18px 14px" }}>
-              <div style={{ color: t.text, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{note.title}</div>
-              <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.5 }}>{note.text}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+            {notes.map((note) => (
+              <div key={note.title} style={{ borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, padding: "18px 18px 14px" }}>
+                <div style={{ color: t.text, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{note.title}</div>
+                <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.5 }}>{note.text}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -487,6 +567,36 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
                     outline: "none",
                   }}
                   placeholder={labels.categoryPlaceholder}
+                />
+                {!verdict && <Button>Ответить</Button>}
+              </form>
+            </>
+          )}
+
+          {current.type === "type-desc" && (
+            <>
+              {!verdict && <div style={{ color: t.sub, fontSize: 13, marginBottom: 16 }}>Напиши предлог по описанию</div>}
+              <div style={{ fontSize: 18, fontWeight: 700, color: t.text, marginBottom: 18, lineHeight: 1.6 }}>{current.desc}</div>
+              <form
+                onSubmit={(e) => { e.preventDefault(); submit(); }}
+                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+              >
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={locked}
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    border: `1px solid ${t.border}`,
+                    background: t.raised,
+                    color: t.text,
+                    fontSize: 16,
+                    fontFamily: "inherit",
+                    textAlign: "center",
+                    outline: "none",
+                  }}
+                  placeholder="например, от"
                 />
                 {!verdict && <Button>Ответить</Button>}
               </form>

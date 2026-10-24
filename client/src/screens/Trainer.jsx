@@ -9,6 +9,7 @@ import ParticlesTrainer from "./ParticlesTrainer";
 import RootsTrainer from "./RootsTrainer";
 import SpeechStylesTrainer from "./SpeechStylesTrainer";
 import PrePriTrainer from "./PrePriTrainer";
+import InformaticsTask2Trainer from "./InformaticsTask2Trainer";
 
 export default function Trainer() {
   const { slug, level } = useParams();
@@ -21,5 +22,6 @@ export default function Trainer() {
   if (slug === "roots") return <RootsTrainer />;
   if (slug === "speech-styles") return <SpeechStylesTrainer />;
   if (slug === "prepri") return <PrePriTrainer />;
+  if (slug === "inf-task2") return <InformaticsTask2Trainer />;
   return <StressTrainer />;
 }

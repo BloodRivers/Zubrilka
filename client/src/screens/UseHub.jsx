@@ -11,6 +11,7 @@ import { TASK_ICONS } from "./OralBank";
 
 const USE_TASK_GROUPS = [
   { task: "1", title: "Части речи", ids: ["pronouns", "adverbs", "conjunctions", "prepositions", "particles"] },
+  { task: "2", title: "Таблицы истинности", ids: ["inf-task2"] },
   { task: "3", title: "Стили речи", ids: ["speech-styles"] },
   { task: "4", title: "Ударения", ids: ["stress"] },
   { task: "5", title: "Паронимы", ids: ["paronyms"] },
@@ -20,6 +21,7 @@ const USE_TASK_GROUPS = [
 
 export const USE_SUBJECTS = [
   { id: "russian", title: "Русский язык", sub: "Задания по русскому языку" },
+  { id: "informatics", title: "Информатика", sub: "Задания по информатике" },
   {
     id: "english",
     title: "Английский язык",

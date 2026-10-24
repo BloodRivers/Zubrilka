@@ -123,6 +123,7 @@ export const TRAINER_LIST = [
   { id: "roots", title: "Корни", sub: "Чередующиеся корни гер/гор, бер/бир и другие — введи пропущенную букву", useSubject: "russian" },
   { id: "speech-styles", title: "Стили речи", sub: "Определи стиль по цели, ситуации и языковым признакам", useSubject: "russian" },
   { id: "prepri", title: "Правописание ПРЕ- и ПРИ-", sub: "Словник задания 10 — введи пропущенную приставку", useSubject: "russian" },
+  { id: "inf-task2", title: "Таблицы истинности", sub: "Задание 2 ЕГЭ — восстанови столбцы по фрагменту таблицы", useSubject: "informatics" },
 ];
 
 export function Stat({ label, value, tint }) {

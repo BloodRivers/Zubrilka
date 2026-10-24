@@ -1,4 +1,5 @@
 import RanksTrainer from "./RanksTrainer";
+import PrepositionsTheory from "./PrepositionsTheory";
 import { PREPOSITION_AMBIGUOUS, PREPOSITION_CATEGORIES, PREPOSITION_CATEGORY_NAMES } from "../data/prepositions";
 
 const LABELS = {
@@ -11,5 +12,5 @@ const LABELS = {
 };
 
 export default function PrepositionsTrainer({ level }) {
-  return <RanksTrainer level={level} categories={PREPOSITION_CATEGORIES} ambiguous={PREPOSITION_AMBIGUOUS} categoryNames={PREPOSITION_CATEGORY_NAMES} slug="prepositions" labels={LABELS} />;
+  return <RanksTrainer level={level} categories={PREPOSITION_CATEGORIES} ambiguous={PREPOSITION_AMBIGUOUS} categoryNames={PREPOSITION_CATEGORY_NAMES} slug="prepositions" labels={LABELS} theory={<PrepositionsTheory />} />;
 }
