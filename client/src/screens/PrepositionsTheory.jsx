@@ -135,27 +135,27 @@ export default function PrepositionsTheory() {
           <tbody>
             <tr>
               <td style={tdStyle(t)}>Пространственные (место, направление)</td>
-              <td style={tdStyle(t)}><Pills items={["в", "на", "к", "из", "до", "от", "под", "над", "перед", "у", "по", "через", "около"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["в", "до", "из", "к", "на", "над", "около", "от", "перед", "по", "под", "у", "через"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t)}>Временные</td>
-              <td style={tdStyle(t)}><Pills items={["в", "к", "до", "после", "в течение", "в продолжение", "спустя", "по мере", "около"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["в", "в продолжение", "в течение", "до", "к", "около", "по мере", "после", "спустя"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t)}>Причинные</td>
-              <td style={tdStyle(t)}><Pills items={["из-за", "ввиду", "вследствие", "по причине", "благодаря"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["благодаря", "ввиду", "вследствие", "из-за", "по причине"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t)}>Целевые</td>
-              <td style={tdStyle(t)}><Pills items={["для", "за", "в целях"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["в целях", "для", "за"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t)}>Образа действия (способ, средство)</td>
-              <td style={tdStyle(t)}><Pills items={["с помощью", "при помощи", "посредством", "за счёт"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["за счёт", "посредством", "при помощи", "с помощью"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t)}>Уступительные</td>
-              <td style={tdStyle(t)}><Pills items={["несмотря на", "вопреки"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["вопреки", "несмотря на"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t)}>Условные</td>
@@ -163,15 +163,15 @@ export default function PrepositionsTheory() {
             </tr>
             <tr>
               <td style={tdStyle(t)}>Сравнительные</td>
-              <td style={tdStyle(t)}><Pills items={["наподобие", "вроде", "в виде"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["в виде", "вроде", "наподобие"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t)}>Объектные</td>
-              <td style={tdStyle(t)}><Pills items={["о", "про", "насчёт", "по поводу"]} t={t} /></td>
+              <td style={tdStyle(t)}><Pills items={["насчёт", "о", "по поводу", "про"]} t={t} /></td>
             </tr>
             <tr>
               <td style={tdStyle(t, true)}>Источник информации</td>
-              <td style={tdStyle(t, true)}><Pills items={["по", "согласно", "в соответствии с", "на основе", "на основании"]} t={t} /></td>
+              <td style={tdStyle(t, true)}><Pills items={["в соответствии с", "на основании", "на основе", "по", "согласно"]} t={t} /></td>
             </tr>
           </tbody>
         </table>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ListChecks, Tag, ScanSearch, Keyboard, MessageSquareText } from "lucide-react";
+import { ListChecks, Tag, ScanSearch, Keyboard, MessageSquareText, PenLine } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
 import { shuffle } from "../utils";
@@ -128,6 +128,7 @@ function buildDescQuestions(categories) {
 function buildQueue(level, categories, catMap, items, descItems = []) {
   if (level === "pick") return shuffle(categories.map((category) => makePick(category.id, catMap, items)));
   if (level === "name") return shuffle(items).map((item) => makeName(item, categories));
+  if (level === "meaning") return shuffle(categories.filter((category) => category.group === "По значению").map((category) => ({ type: "type-word", catId: category.id })));
   if (level === "odd") return shuffle(categories.filter((category) => category.words.length >= 3).map((category) => makeOdd(category.id, catMap, items)).filter(Boolean));
   if (level === "desc") {
     return buildDescQuestions(categories);
@@ -166,6 +167,7 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
   const levels = [
     { id: "pick", icon: ListChecks, title: `${capitalize(labels.plural)} по разряду`, sub: `Выбери все ${labels.plural}, относящиеся к указанному разряду` },
     { id: "name", icon: Tag, title: `Разряд по ${labels.singular}`, sub: `Укажи разряд предложенного ${labels.singular}` },
+    ...(categories.some((category) => category.group === "По значению") ? [{ id: "meaning", icon: PenLine, title: "По значению", sub: `Напиши ${labels.plural}, относящиеся к указанному значению` }] : []),
     { id: "type", icon: Keyboard, title: "Пиши вручную", sub: `Впиши разряд или ${labels.plural} без подсказок` },
     ...(slug === "prepositions" || descItems.length ? [{ id: "desc", icon: MessageSquareText, title: "По описанию", sub: "По характеристикам напиши подходящий предлог" }] : []),
   ];
@@ -516,7 +518,7 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
           {current.type === "type-word" && (
             <>
               <div style={{ fontSize: 16, fontWeight: 700, color: t.text, marginBottom: 4 }}>{catMap[current.catId].title}</div>
-              {!verdict && <div style={{ color: t.sub, fontSize: 13, marginBottom: 16 }}>Введи слова этого разряда через запятую или пробел (минимум {Math.min(5, catMap[current.catId].words.length)})</div>}
+              {!verdict && <div style={{ color: t.sub, fontSize: 13, marginBottom: 16 }}>{level === "meaning" ? "Напиши предлоги этого значения" : "Введи слова этого разряда"} через запятую или пробел (минимум {Math.min(5, catMap[current.catId].words.length)})</div>}
               <form
                 onSubmit={(e) => { e.preventDefault(); submit(); }}
                 style={{ display: "flex", flexDirection: "column", gap: 12 }}
