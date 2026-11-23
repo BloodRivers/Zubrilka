@@ -1,5 +1,6 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { katexHtml } from "../utils";
+import { commonsSearchUrl, pickCommonsImage } from "../imageSearch";
 
 function parseInline(src) {
   const s = String(src || "");
@@ -18,6 +19,27 @@ function parseInline(src) {
       buf.push(c, s[i + 1]);
       i += 2;
       continue;
+    }
+    if (c === "!" && s[i + 1] === "[") {
+      const close = s.indexOf("]", i + 2);
+      if (close !== -1 && s[close + 1] === "(") {
+        const end = s.indexOf(")", close + 2);
+        if (end !== -1) {
+          flush();
+          nodes.push({ type: "image", alt: s.slice(i + 2, close), href: s.slice(close + 2, end) });
+          i = end + 1;
+          continue;
+        }
+      }
+    }
+    if (c === "~" && s[i + 1] === "~") {
+      const end = s.indexOf("~~", i + 2);
+      if (end !== -1 && end > i + 2) {
+        flush();
+        nodes.push({ type: "del", children: parseInline(s.slice(i + 2, end)) });
+        i = end + 2;
+        continue;
+      }
     }
     if (c === "$") {
       const display = s[i + 1] === "$";
@@ -114,6 +136,18 @@ function parseBlocks(src) {
   while (i < lines.length) {
     const line = lines[i];
     const t = line.trim();
+    if (t.startsWith("```")) {
+      const lang = t.slice(3).trim();
+      const code = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+        code.push(lines[i]);
+        i += 1;
+      }
+      i += 1;
+      push({ type: "codeblock", lang, text: code.join("\n") });
+      continue;
+    }
     if (t.startsWith("$$")) {
       let j = i;
       let body = line.slice(line.indexOf("$$") + 2);
@@ -164,7 +198,13 @@ function parseBlocks(src) {
         }
         const indent = m[1].replace(/\t/g, "  ").length;
         const ordered = /^\d/.test(m[2]);
-        const item = { text: m[3], ordered, items: [] };
+        const task = /^\[([ xX])\]\s+(.*)$/.exec(m[3]);
+        const item = {
+          text: task ? task[2] : m[3],
+          ordered,
+          checked: task ? /[xX]/.test(task[1]) : null,
+          items: [],
+        };
         while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
         stack[stack.length - 1].items.push(item);
         stack.push({ indent, items: item.items });
@@ -202,6 +242,10 @@ function Inline({ nodes, t, k }) {
         switch (n.type) {
           case "text":
             return <span key={key}>{n.value}</span>;
+          case "del":
+            return <s key={key}><Inline nodes={n.children} t={t} k={key} /></s>;
+          case "image":
+            return <RemoteImage key={`${key}-${n.href}`} alt={n.alt} href={n.href} t={t} />;
           case "math":
             return (
               <span
@@ -243,7 +287,9 @@ function List({ items, t, k }) {
         const key = `${k}-${i}`;
         return (
           <div key={key} style={{ display: "flex", gap: 8, padding: "3px 0", lineHeight: 1.5 }}>
-            <span style={{ color: t.sub, flexShrink: 0, fontWeight: 600 }}>{item.ordered ? `${i + 1}.` : "•"}</span>
+            <span style={{ color: t.sub, flexShrink: 0, fontWeight: 600 }}>
+              {item.checked === null ? (item.ordered ? `${i + 1}.` : "•") : (item.checked ? "☑" : "☐")}
+            </span>
             <div style={{ flex: 1, minWidth: 0, whiteSpace: "pre-wrap" }}>
               <div style={{ color: t.text }}>
                 <Inline nodes={parseInline(item.text)} t={t} k={key} />
@@ -326,6 +372,55 @@ function Table({ headers, rows, t }) {
   );
 }
 
+const COMMONS_HOST = /^https:\/\/(upload\.wikimedia\.org|thumb\.wikimedia\.org|commons\.wikimedia\.org)\//i;
+
+function RemoteImage({ alt, href, t }) {
+  // Модель пишет img:запрос, а не URL: так нельзя получить выдуманную ссылку.
+  const query = href.startsWith("img:") ? href.slice(4).trim() : "";
+  const direct = !query && COMMONS_HOST.test(href) ? href : "";
+  const [found, setFound] = useState(null);
+  const [loading, setLoading] = useState(Boolean(query));
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    if (!query) return undefined;
+    let alive = true;
+    fetch(commonsSearchUrl(query))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => { if (alive) setFound(pickCommonsImage(json)); })
+      .catch(() => { if (alive) setFound(null); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [query]);
+
+  const src = direct || found?.src;
+  if (loading) return <div style={{ color: t.sub, fontSize: 12, margin: "8px 0" }}>Подбираю картинку…</div>;
+  if (!src || broken) {
+    return (
+      <a href={direct || found?.source || "https://commons.wikimedia.org/"} target="_blank" rel="noreferrer" style={{ color: t.invBg, fontSize: 12 }}>
+        {alt || query || "Картинка"} — источник
+      </a>
+    );
+  }
+  const source = found?.source || direct;
+  const caption = [alt || found?.title, found?.license].filter(Boolean).join(" · ");
+  return (
+    <figure style={{ margin: "12px 0" }}>
+      <img
+        src={src}
+        alt={alt || found?.title || "Рисунок"}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+        style={{ width: "100%", display: "block", borderRadius: 12, border: `1px solid ${t.border}` }}
+      />
+      <figcaption style={{ color: t.sub, fontSize: 11, lineHeight: 1.4, marginTop: 6 }}>
+        {source ? <a href={source} target="_blank" rel="noreferrer" style={{ color: t.invBg }}>{caption || "Wikimedia Commons"}</a> : caption}
+      </figcaption>
+    </figure>
+  );
+}
+
 export default function MarkdownText({ text, t, style }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
   return (
@@ -344,6 +439,12 @@ export default function MarkdownText({ text, t, style }) {
               <div key={k} style={{ color: t.text, lineHeight: 1.55, margin: "8px 0", whiteSpace: "pre-line", wordBreak: "break-word" }}>
                 <Inline nodes={parseInline(b.text)} t={t} k={k} />
               </div>
+            );
+          case "codeblock":
+            return (
+              <pre key={k} style={{ margin: "10px 0", padding: "12px 14px", overflowX: "auto", borderRadius: 12, border: `1px solid ${t.border}`, background: t.raised, color: t.text, fontSize: 12, lineHeight: 1.5, whiteSpace: "pre" }}>
+                <code>{b.text}</code>
+              </pre>
             );
           case "math":
             return <div key={k} dangerouslySetInnerHTML={{ __html: katexHtml(b.value, true) }} style={{ overflowX: "auto", margin: "12px 0" }} />;
