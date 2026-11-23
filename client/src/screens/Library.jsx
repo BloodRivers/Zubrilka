@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
 import { EASE } from "../theme/theme";
@@ -6,7 +7,8 @@ import { GhostLibrary, useGhostHold } from "../components/Ghost";
 import Segmented from "../components/Segmented";
 import Avatar from "../components/Avatar";
 import ListRow from "../components/ListRow";
-import { GraduationCap } from "lucide-react";
+import Modal from "../components/Modal";
+import { ArrowUp, Check, GraduationCap, SlidersHorizontal } from "lucide-react";
 import { listPublicNotes, listPublicTests } from "../api/firestore";
 import { testSizeLabel } from "../api/backend";
 import { setReturnTo } from "../nav";
@@ -68,6 +70,9 @@ export default function Library() {
   const [tab, setTab] = useState("notes");
   const [q, setQ] = useState("");
   const [subject, setSubject] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [showTop, setShowTop] = useState(false);
+  const lastTopRef = useRef(0);
 
   useEffect(() => {
     (async () => {
@@ -135,22 +140,51 @@ export default function Library() {
     return [];
   }, [notes, tests, tab, q, subject]);
 
+  useEffect(() => {
+    const scroller = document.querySelector(".scrollarea");
+    if (!scroller) return;
+    lastTopRef.current = scroller.scrollTop;
+    const update = () => {
+      const top = scroller.scrollTop;
+      const delta = top - lastTopRef.current;
+      if (delta < -1) {
+        setShowTop(top > 8);
+        lastTopRef.current = top;
+      } else if (delta > 1) {
+        setShowTop(false);
+        lastTopRef.current = top;
+      }
+    };
+    scroller.addEventListener("scroll", update, { passive: true });
+    return () => scroller.removeEventListener("scroll", update);
+  }, [items.length, tab, showGhost]);
+
   const searchBar = (opacity) => (
-    <div
-      style={{
-        width: "100%",
-        boxSizing: "border-box",
-        padding: "14px 16px",
-        marginBottom: 14,
-        borderRadius: 16,
-        border: `1px solid ${t.border}`,
-        background: t.surface,
-        color: t.sub,
-        fontSize: 15,
-        opacity,
-      }}
-    >
-      Поиск по названию или автору
+    <div style={{ display: "flex", gap: 8, marginBottom: 14, opacity }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          boxSizing: "border-box",
+          padding: "14px 16px",
+          borderRadius: 16,
+          border: `1px solid ${t.border}`,
+          background: t.surface,
+          color: t.sub,
+          fontSize: 15,
+        }}
+      >
+        Поиск по названию или автору
+      </div>
+      <div
+        style={{
+          flexShrink: 0,
+          width: 50,
+          borderRadius: 16,
+          border: `1px solid ${t.border}`,
+          background: t.surface,
+        }}
+      />
     </div>
   );
 
@@ -175,24 +209,48 @@ export default function Library() {
 
   return (
     <div>
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Поиск по названию или автору"
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          padding: "14px 16px",
-          marginBottom: 12,
-          borderRadius: 16,
-          border: `1px solid ${t.border}`,
-          background: t.surface,
-          color: t.text,
-          fontSize: 15,
-          fontFamily: "inherit",
-          outline: "none",
-        }}
-      />
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Поиск по названию или автору"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            boxSizing: "border-box",
+            padding: "14px 16px",
+            borderRadius: 16,
+            border: `1px solid ${t.border}`,
+            background: t.surface,
+            color: t.text,
+            fontSize: 15,
+            fontFamily: "inherit",
+            outline: "none",
+          }}
+        />
+        {subjectOptions.length > 0 && (
+          <button
+            type="button"
+            className="press"
+            onClick={() => setFilterOpen(true)}
+            aria-label="Фильтр по предмету"
+            style={{
+              flexShrink: 0,
+              width: 50,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 16,
+              border: `1px solid ${subject ? t.invBg : t.border}`,
+              background: subject ? t.invBg : t.surface,
+              color: subject ? t.inv : t.sub,
+              cursor: "pointer",
+            }}
+          >
+            <SlidersHorizontal size={19} />
+          </button>
+        )}
+      </div>
 
       <Segmented
         options={[
@@ -219,58 +277,52 @@ export default function Library() {
       ) : (
         <>
       {subjectOptions.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            overflowX: "auto",
-            padding: "2px 2px 8px",
-            marginBottom: 4,
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          <button
-            type="button"
-            className="press"
-            onClick={() => setSubject("")}
-            style={{
-              flexShrink: 0,
-              padding: "7px 12px",
-              borderRadius: 999,
-              border: `1px solid ${subject === "" ? t.invBg : t.border}`,
-              background: subject === "" ? t.invBg : t.raised,
-              color: subject === "" ? t.inv : t.sub,
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
+          <Modal
+            open={filterOpen}
+            onClose={() => setFilterOpen(false)}
+            title="Предмет"
+            maxWidth={340}
+            maxHeight="70dvh"
+            pad="20px 18px 16px"
           >
-            Все предметы
-          </button>
-          {subjectOptions.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className="press"
-              onClick={() => setSubject(subject === s ? "" : s)}
-              style={{
-                flexShrink: 0,
-                padding: "7px 12px",
-                borderRadius: 999,
-                border: `1px solid ${subject === s ? t.invBg : t.border}`,
-                background: subject === s ? t.invBg : t.raised,
-                color: subject === s ? t.inv : t.sub,
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
+            {["", ...subjectOptions].map((s) => {
+              const active = subject === s;
+              return (
+                <button
+                  key={s || "all"}
+                  type="button"
+                  className="rowpress"
+                  onClick={() => {
+                    setSubject(s);
+                    setFilterOpen(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    textAlign: "left",
+                    padding: "13px 14px",
+                    marginBottom: 8,
+                    borderRadius: 14,
+                    border: `1px solid ${t.border}`,
+                    background: active ? t.invBg : t.raised,
+                    color: active ? t.inv : t.text,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s || "Все предметы"}
+                  </span>
+                  {active && <Check size={16} color={t.inv} />}
+                </button>
+              );
+            })}
+          </Modal>
       )}
 
       {items.length === 0 ? (
@@ -359,6 +411,41 @@ export default function Library() {
         ))
       )}
         </>
+      )}
+
+      {createPortal(
+        <button
+          type="button"
+          className="press"
+          aria-label="Наверх"
+          tabIndex={showTop ? 0 : -1}
+          onClick={() => document.querySelector(".scrollarea")?.scrollTo({ top: 0, behavior: "smooth" })}
+          style={{
+            position: "fixed",
+            right: 18,
+            bottom: "calc(84px + env(safe-area-inset-bottom, 0px))",
+            zIndex: 260,
+            width: 46,
+            height: 46,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: 999,
+            border: `1px solid ${t.border}`,
+            background: "transparent",
+            color: t.text,
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+            cursor: "pointer",
+            opacity: showTop ? 1 : 0,
+            transform: showTop ? "translateY(0) scale(1)" : "translateY(8px) scale(0.9)",
+            pointerEvents: showTop ? "auto" : "none",
+            transition: `opacity 200ms ease, transform 240ms ${EASE}`,
+          }}
+        >
+          <ArrowUp size={20} />
+        </button>,
+        document.body
       )}
     </div>
   );

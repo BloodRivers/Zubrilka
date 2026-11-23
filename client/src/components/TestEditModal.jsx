@@ -5,6 +5,7 @@ import Button from "./Button";
 import Modal from "./Modal";
 import FieldLabel from "./FieldLabel";
 import Switch from "./Switch";
+import { sfx } from "../sfx";
 import { setTestPublic, updateTest, getTest, deleteTest } from "../api/firestore";
 import { auth } from "../firebase";
 
@@ -16,8 +17,10 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
   const { t } = useTheme();
   const { alert } = useAlert();
   const [isPublic, setIsPublic] = useState(false);
+  const [initialPublic, setInitialPublic] = useState(false);
   const [busy, setBusy] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   const [label, setLabel] = useState(title || "Тест");
 
   useEffect(() => {
@@ -28,8 +31,16 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
       try {
         const test = await getTest(testId);
         if (cancelled) return;
-        setIsPublic(!!test?.public);
-        setCanEdit(!test?.owner_id || test.owner_id === auth.currentUser?.uid);
+        if (!test) {
+          setCanEdit(false);
+          return;
+        }
+        const owner = !test.owner_id || test.owner_id === auth.currentUser?.uid;
+        const isPublic = !!test?.public;
+        setIsOwner(owner);
+        setIsPublic(isPublic);
+        setInitialPublic(isPublic);
+        setCanEdit(owner || (!!auth.currentUser && !auth.currentUser.isAnonymous && isPublic));
         if (test?.title) setLabel(test.title);
       } catch {
         if (!cancelled) setCanEdit(false);
@@ -48,7 +59,9 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
     setBusy(true);
     try {
       await updateTest(testId, { title: finalTitle });
-      await setTestPublic(testId, isPublic, subjectName);
+      if (isOwner && isPublic !== initialPublic) {
+        await setTestPublic(testId, isPublic, subjectName);
+      }
       onChanged?.();
       requestClose();
     } catch (e) {
@@ -111,9 +124,9 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
       <FieldLabel t={t}>Параметры</FieldLabel>
       <button
         type="button"
-        onClick={() => canEdit && setIsPublic((p) => !p)}
+        onClick={() => { if (!isOwner) return; sfx.tap(); setIsPublic((p) => !p); }}
         className="press"
-        disabled={!canEdit || busy}
+        disabled={!isOwner || busy}
         style={{
           display: "flex",
           alignItems: "center",
@@ -125,10 +138,10 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
           borderRadius: 14,
           border: `1px solid ${t.border}`,
           background: t.raised,
-          cursor: canEdit ? "pointer" : "default",
+          cursor: isOwner ? "pointer" : "default",
           fontFamily: "inherit",
           textAlign: "left",
-          opacity: canEdit ? 1 : 0.6,
+          opacity: isOwner ? 1 : 0.6,
         }}
       >
         <div style={{ minWidth: 0 }}>
@@ -137,14 +150,14 @@ export default function TestEditModal({ open, testId, title, subjectName, onClos
             Тест увидят все пользователи
           </div>
         </div>
-        <Switch on={isPublic} disabled={!canEdit} />
+        <Switch on={isPublic} disabled={!isOwner} />
       </button>
 
       <Button type="button" variant="primary" onClick={save} disabled={!canEdit || busy}>
         {busy ? "Сохраняю…" : "Сохранить"}
       </Button>
 
-      {canEdit && (
+      {isOwner && (
         <button
           type="button"
           className="press"

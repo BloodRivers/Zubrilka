@@ -40,6 +40,7 @@ export function tabOf(pathname) {
   if (pathname.startsWith("/account")) return "/account";
   if (
     pathname === "/"
+    || pathname === "/changelog"
     || pathname.startsWith("/subject")
     || pathname.startsWith("/note")
     || pathname.startsWith("/test")
@@ -72,6 +73,7 @@ export function resumeTab(root) {
 
 export function backOf(pathname, state) {
   if (state?.from) return state.from;
+  if (pathname === "/changelog") return "/";
   const ret = peekReturnTo();
   if (ret && /^\/(note|test|results)/.test(pathname)) return ret;
 

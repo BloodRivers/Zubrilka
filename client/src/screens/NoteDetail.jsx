@@ -12,6 +12,8 @@ import SharedAuthorBar from "../components/AuthorBar";
 import MathText from "../components/MathText";
 import MarkdownText from "../components/MarkdownText";
 import SaveToSubjectModal from "../components/SaveToSubjectModal";
+import TestEditModal from "../components/TestEditModal";
+import useLongPress from "../hooks/useLongPress";
 import { GhostNote, useGhostHold } from "../components/Ghost";
 import { getNote, listSubjects, copyNoteToSubject, listTestsForNotes, listPublicTestsForNote, updateNoteSummary } from "../api/firestore";
 import { testSizeLabel, generateSummary, normalizeSummary } from "../api/backend";
@@ -22,6 +24,50 @@ function testHasContent(t) {
     || (t?.match?.length || 0) > 0
     || Boolean(t?.written?.prompt)
     || (t?.written?.questions?.length || 0) > 0;
+}
+
+/** Тесты конспекта: свои — любые, чужой публичный — только опубликованные. */
+async function loadNoteTests(note, noteId) {
+  if (!note) return [];
+  const foreign = Boolean(note.owner_id && note.owner_id !== auth.currentUser?.uid);
+  const list = foreign
+    ? await listPublicTestsForNote(noteId).catch(() => [])
+    : await listTestsForNotes([noteId]).catch(() => []);
+  return list.filter(testHasContent);
+}
+
+function TestRow({ test, onOpen, onEdit }) {
+  const { t } = useTheme();
+  const long = useLongPress({ onClick: onOpen, onLongPress: onEdit });
+  const sizeLabel = testSizeLabel(test);
+  const parts = [];
+  if (test.questions?.length) parts.push(`${test.questions.length} вопр.`);
+  if (test.quizlet?.length) parts.push(`${test.quizlet.length} карт.`);
+  if (test.match?.length) parts.push(`${test.match.length} пар`);
+  if (test.written?.prompt || test.written?.questions?.length) parts.push("письм.");
+
+  return (
+    <button
+      type="button"
+      className="rowpress"
+      {...long}
+      style={{
+        width: "100%",
+        display: "block",
+        textAlign: "left",
+        padding: "13px 15px",
+        borderRadius: 14,
+        border: `1px solid ${t.border}`,
+        background: t.surface,
+        color: t.text,
+        fontFamily: "inherit",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 600 }}>{test.title || "Тест"}</div>
+      {sizeLabel ? <div style={{ color: t.sub, fontSize: 12, marginTop: 5 }}>{sizeLabel}</div> : parts.length > 0 && <div style={{ color: t.sub, fontSize: 12, marginTop: 5 }}>{parts.join(" · ")}</div>}
+    </button>
+  );
 }
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV"];
@@ -234,6 +280,7 @@ export default function NoteDetail() {
   const [subjects, setSubjects] = useState([]);
   const [saving, setSaving] = useState(false);
   const [tests, setTests] = useState([]);
+  const [editingTest, setEditingTest] = useState(null);
   const [genBusy, setGenBusy] = useState(false);
   const showGhost = useGhostHold(!note);
 
@@ -248,16 +295,8 @@ export default function NoteDetail() {
           return;
         }
         setNote(n);
-        const foreign = Boolean(n.owner_id && n.owner_id !== auth.currentUser?.uid);
-        if (foreign) {
-          const pubs = (await listPublicTestsForNote(noteId).catch(() => []))
-            .filter(testHasContent);
-          setTests(pubs);
-        } else {
-          const own = (await listTestsForNotes([noteId]).catch(() => []))
-            .filter(testHasContent);
-          setTests(own);
-        }
+        const ts = await loadNoteTests(n, noteId);
+        if (!cancelled) setTests(ts);
       } catch {
         if (!cancelled) setNote({ id: noteId, missing: true });
       }
@@ -413,37 +452,14 @@ export default function NoteDetail() {
               Тестов по этому конспекту пока нет.
             </div>
           )}
-          {tests.map((test) => {
-            const sizeLabel = testSizeLabel(test);
-            const parts = [];
-            if (test.questions?.length) parts.push(`${test.questions.length} вопр.`);
-            if (test.quizlet?.length) parts.push(`${test.quizlet.length} карт.`);
-            if (test.match?.length) parts.push(`${test.match.length} пар`);
-            if (test.written?.prompt || test.written?.questions?.length) parts.push("письм.");
-            return (
-              <button
-                key={test.id}
-                type="button"
-                className="rowpress"
-                onClick={() => navigate(`/test/${test.id}/quiz/full`, { state: { from: `/note/${noteId}` } })}
-                style={{
-                  width: "100%",
-                  display: "block",
-                  textAlign: "left",
-                  padding: "13px 15px",
-                  borderRadius: 14,
-                  border: `1px solid ${t.border}`,
-                  background: t.surface,
-                  color: t.text,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{test.title || "Тест"}</div>
-                {sizeLabel ? <div style={{ color: t.sub, fontSize: 12, marginTop: 5 }}>{sizeLabel}</div> : parts.length > 0 && <div style={{ color: t.sub, fontSize: 12, marginTop: 5 }}>{parts.join(" · ")}</div>}
-              </button>
-            );
-          })}
+          {tests.map((test) => (
+            <TestRow
+              key={test.id}
+              test={test}
+              onOpen={() => navigate(`/test/${test.id}/quiz/full`, { state: { from: `/note/${noteId}` } })}
+              onEdit={isGuest ? undefined : () => setEditingTest(test)}
+            />
+          ))}
           {!isGuest && !isForeign && (
             <Button
               variant="dashed"
@@ -471,6 +487,15 @@ export default function NoteDetail() {
           </Button>
         )}
       </div>
+
+      <TestEditModal
+        open={Boolean(editingTest)}
+        testId={editingTest?.id}
+        title={editingTest?.title}
+        subjectName={location.state?.subjectName}
+        onClose={() => setEditingTest(null)}
+        onChanged={async () => setTests(await loadNoteTests(note, noteId))}
+      />
 
       <SaveToSubjectModal
         open={saveOpen}

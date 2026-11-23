@@ -309,7 +309,8 @@ export default function InformaticsTask2Trainer() {
           backLabel="Вернуться к ЕГЭ"
         />
       ) : current ? (
-        <div style={{ padding: "20px 16px", borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, marginTop: 12 }}>
+        <div className="inf2-split" style={{ padding: "20px 16px", borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, marginTop: 12 }}>
+          <div className="inf2-task">
           <div style={{ color: t.sub, fontSize: 12, marginBottom: 12, textAlign: "center" }}>
             Случайная задача
           </div>
@@ -333,8 +334,9 @@ export default function InformaticsTask2Trainer() {
           )}
 
           <TruthTable item={current} t={t} />
+          </div>
 
-          <div style={{ marginTop: 16 }}>
+          <div className="inf2-work">
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
               <span style={{ color: t.text, fontSize: 13, fontWeight: 700 }}>Решение на Python</span>
             </div>
@@ -375,7 +377,6 @@ export default function InformaticsTask2Trainer() {
               {py.status === "error" && <span style={{ color: t.danger, fontSize: 12 }}>{py.error}</span>}
               {py.status === "loading" && <span style={{ color: t.sub, fontSize: 12 }}>первый запуск ~10–15 с</span>}
             </div>
-          </div>
 
           <div style={{ height: 1, background: t.border, margin: "18px 0 14px" }} />
 
@@ -431,6 +432,7 @@ export default function InformaticsTask2Trainer() {
                 {verdict.ok ? "Верно." : "Неверно. Задача останется, пока не решишь."}
               </span>
             )}
+          </div>
           </div>
         </div>
       ) : null}

@@ -10,6 +10,9 @@ service cloud.firestore {
     function isPublic(data) {
       return data.public == true;
     }
+    function realUser() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
 
     match /users/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
@@ -38,7 +41,12 @@ service cloud.firestore {
     match /tests/{id} {
       allow read: if (!signedIn() && isPublic(resource.data)) || (signedIn() && (isOwner(resource.data) || isPublic(resource.data)));
       allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
-      allow update, delete: if isOwner(resource.data);
+      // Друг может переименовать публичный тест, но не снять его с публикации и не забрать авторство.
+      allow update: if isOwner(resource.data)
+        || (realUser() && isPublic(resource.data)
+          && request.resource.data.owner_id == resource.data.owner_id
+          && request.resource.data.public == true);
+      allow delete: if isOwner(resource.data);
     }
 
     match /test_results/{id} {

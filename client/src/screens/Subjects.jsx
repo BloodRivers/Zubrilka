@@ -26,7 +26,6 @@ import ListRow from "../components/ListRow";
 import Button from "../components/Button";
 import Modal from "../components/Modal";
 import FieldLabel from "../components/FieldLabel";
-import Accordion from "../components/Accordion";
 import { GhostList, useGhostHold } from "../components/Ghost";
 import { auth } from "../firebase";
 import { listSubjects, createSubject, updateSubject, deleteSubject, countNotes } from "../api/firestore";
@@ -54,7 +53,7 @@ const PREMADE_SUBJECTS = [
   "География", "Информатика", "ОБЖ",
 ];
 
-const CHANGELOG = [
+export const CHANGELOG = [
   {
     date: "24 октября 2026",
     items: [
@@ -546,7 +545,8 @@ function SubjectModal({ open, initial, onClose, onSave, onDelete }) {
 }
 
 function Changelog({ t }) {
-  const [open, setOpen] = useState(null);
+  const navigate = useNavigate();
+  const latest = CHANGELOG[0];
   return (
     <div style={{ marginTop: 34, paddingBottom: 8 }}>
       <div
@@ -564,20 +564,26 @@ function Changelog({ t }) {
       >
         <Sparkles size={15} /> Что нового
       </div>
-      {CHANGELOG.map((rel, i) => (
-        <Accordion
-          key={i}
-          title={rel.date}
-          open={open === i}
-          onToggle={() => setOpen(open === i ? null : i)}
-        >
-          {(rel.items || []).map((item, j) => (
-            <div key={j} style={{ color: t.sub, fontSize: 14, padding: "5px 0", paddingLeft: 4, lineHeight: 1.45 }}>
-              — {item}
-            </div>
-          ))}
-        </Accordion>
-      ))}
+      <div
+        style={{
+          borderRadius: 14,
+          border: `1px solid ${t.border}`,
+          background: t.surface,
+          padding: "14px 16px",
+        }}
+      >
+        <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>{latest.date}</div>
+        {(latest.items || []).map((item, j) => (
+          <div key={j} style={{ color: t.sub, fontSize: 14, padding: "5px 0", lineHeight: 1.45 }}>
+            — {item}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <Button variant="dashed" onClick={() => navigate("/changelog")}>
+          Подробнее
+        </Button>
+      </div>
     </div>
   );
 }

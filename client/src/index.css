@@ -208,3 +208,12 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   animation: ghostShimmer 1.15s ease-in-out infinite;
   pointer-events: none;
 }
+
+/* Informatics task 2: LeetCode-style split on desktop */
+.inf2-split { display: flex; flex-direction: column; }
+.inf2-work { margin-top: 16px; }
+@media (min-width: 900px) {
+  .inf2-split { flex-direction: row; align-items: flex-start; gap: 28px; }
+  .inf2-task, .inf2-work { flex: 1 1 0; min-width: 0; }
+  .inf2-work { margin-top: 0; position: sticky; top: 8px; }
+}

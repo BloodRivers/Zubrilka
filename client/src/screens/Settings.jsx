@@ -8,7 +8,7 @@ import { auth } from "../firebase";
 import { MODEL_OPTIONS, getApiKey, setApiKey, getBalance, getModel, setModel, onApiKeyChange, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import { updateUserProfile, getUserProfile } from "../api/firestore";
 import { enablePushNotifications } from "../api/push";
-import { setSfxEnabled, isSfxEnabled, onSfxChange } from "../sfx";
+import { sfx, setSfxEnabled, isSfxEnabled, onSfxChange } from "../sfx";
 import Switch from "../components/Switch";
 import Segmented from "../components/Segmented";
 import { GhostInline } from "../components/Ghost";
@@ -259,7 +259,7 @@ export default function Settings({ isGuest }) {
       <button
         type="button"
         className="press"
-        onClick={() => setSfxEnabled(!sfxOn)}
+        onClick={() => { const next = !sfxOn; setSfxEnabled(next); if (next) sfx.tap(); }}
         style={{
           width: "100%",
           ...row(t),

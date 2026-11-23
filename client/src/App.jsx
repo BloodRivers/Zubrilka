@@ -33,6 +33,7 @@ import Account from "./screens/Account";
 import Library from "./screens/Library";
 import UserProfile from "./screens/UserProfile";
 import Legal from "./screens/Legal";
+import Changelog from "./screens/Changelog";
 import GradeLab from "./screens/GradeLab";
 import NotFound from "./screens/NotFound";
 import { Check, Lock } from "lucide-react";
@@ -40,6 +41,7 @@ import { TRAINER_LIST } from "./screens/StressTrainer";
 
 function titleFor(path) {
   if (path === "/") return "Главная";
+  if (path === "/changelog") return "Что нового";
   if (path === "/account") return "Аккаунт";
   if (path === "/library") return "Библиотека";
   if (path === "/settings") return "Настройки";
@@ -751,7 +753,7 @@ function Shell() {
             <TopBar
               title={screenTitle || titleFor(location.pathname)}
               onBack={
-                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/use\/|\/(terms|privacy|cookies)/.test(location.pathname)
+                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/use\/|\/(terms|privacy|cookies|changelog)/.test(location.pathname)
                   ? async () => {
                       if (!(await confirmLeaveQuiz())) return;
                       const dest = backOf(location.pathname, location.state);
@@ -766,6 +768,7 @@ function Shell() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Subjects />} />
+              <Route path="/changelog" element={<Changelog />} />
               <Route path="/trainer/:slug/:level" element={<Trainer />} />
               <Route path="/trainer/:slug" element={<Trainer />} />
               <Route path="/use/:slug" element={<UseHub />} />

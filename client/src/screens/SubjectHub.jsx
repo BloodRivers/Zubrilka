@@ -16,12 +16,13 @@ import { listNotes, getSubject, updateNote, deleteNote, listResults, setNotePubl
 import { testSizeLabel } from "../api/backend";
 import { setScreenTitle } from "../nav";
 import Switch from "../components/Switch";
+import { sfx } from "../sfx";
 
 function ToggleRow({ label, hint, on, onToggle, t, style }) {
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={() => { sfx.tap(); onToggle(); }}
       className="press"
       style={{
         display: "flex",
