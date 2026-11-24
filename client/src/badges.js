@@ -11,6 +11,11 @@ const BADGES = {
   "Вопрос": ["raised", "text"],
 };
 
+/** Бейдж всегда идёт последним, даже если модель поставила его в начале. */
+export function badgesLast(nodes) {
+  return [...nodes.filter((n) => n.type !== "badge"), ...nodes.filter((n) => n.type === "badge")];
+}
+
 /** Только известные бейджи; остальное остаётся обычным текстом. */
 export function badgeTheme(label) {
   const key = String(label || "").trim().replace(/:$/, "").replace(/^./, (c) => c.toUpperCase());

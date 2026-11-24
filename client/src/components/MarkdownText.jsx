@@ -1,6 +1,6 @@
 import { Fragment, useMemo } from "react";
 import { katexHtml } from "../utils";
-import { badgeTheme } from "../badges";
+import { badgeTheme, badgesLast } from "../badges";
 
 function parseInline(src) {
   const s = String(src || "");
@@ -94,7 +94,7 @@ function parseInline(src) {
     i += 1;
   }
   flush();
-  return nodes;
+  return badgesLast(nodes);
 }
 
 const LIST_RE = /^(\s*)([-*+•\u2014]|\d{1,3}[.)])\s+(.*)$/;
@@ -402,12 +402,15 @@ export default function MarkdownText({ text, t, style }) {
             return <div key={k} style={{ margin: "8px 0" }}><List items={b.items} t={t} k={k} /></div>;
           case "table":
             return <Table key={k} headers={b.headers} rows={b.rows} t={t} />;
-          case "quote":
+          case "quote": {
+            const found = /\[\[([^\]]+)\]\]/.exec(b.text);
+            const badge = found && badgeTheme(found[1]);
             return (
-              <div key={k} style={{ borderLeft: `3px solid ${t.border}`, paddingLeft: 12, margin: "8px 0" }}>
+              <div key={k} style={{ borderLeft: `3px solid ${badge ? t[badge[1]] : t.border}`, paddingLeft: 12, margin: "8px 0" }}>
                 <MarkdownText text={b.text} t={t} />
               </div>
             );
+          }
           case "hr":
             return <div key={k} style={{ borderTop: `1px solid ${t.border}`, margin: "14px 0" }} />;
           default:
