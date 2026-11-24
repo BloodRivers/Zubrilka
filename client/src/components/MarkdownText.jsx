@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo } from "react";
 import { katexHtml } from "../utils";
-import { commonsSearchUrl, pickCommonsImage } from "../imageSearch";
+import { badgeTheme } from "../badges";
 
 function parseInline(src) {
   const s = String(src || "");
@@ -20,16 +20,13 @@ function parseInline(src) {
       i += 2;
       continue;
     }
-    if (c === "!" && s[i + 1] === "[") {
-      const close = s.indexOf("]", i + 2);
-      if (close !== -1 && s[close + 1] === "(") {
-        const end = s.indexOf(")", close + 2);
-        if (end !== -1) {
-          flush();
-          nodes.push({ type: "image", alt: s.slice(i + 2, close), href: s.slice(close + 2, end) });
-          i = end + 1;
-          continue;
-        }
+    if (c === "[" && s[i + 1] === "[") {
+      const end = s.indexOf("]]", i + 2);
+      if (end !== -1) {
+        flush();
+        nodes.push({ type: "badge", label: s.slice(i + 2, end).trim() });
+        i = end + 2;
+        continue;
       }
     }
     if (c === "~" && s[i + 1] === "~") {
@@ -238,8 +235,15 @@ function Inline({ nodes, t, k }) {
             return <span key={key}>{n.value}</span>;
           case "del":
             return <s key={key}><Inline nodes={n.children} t={t} k={key} /></s>;
-          case "image":
-            return <RemoteImage key={`${key}-${n.href}`} alt={n.alt} href={n.href} t={t} />;
+          case "badge": {
+            const theme = badgeTheme(n.label);
+            if (!theme) return <span key={key}>{`[[${n.label}]]`}</span>;
+            return (
+              <span key={key} style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, background: t[theme[0]], color: t[theme[1]], fontSize: 11, fontWeight: 700, marginRight: 6, verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                {n.label}
+              </span>
+            );
+          }
           case "math":
             return (
               <span
@@ -364,55 +368,6 @@ function Table({ headers, rows, t }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-const COMMONS_HOST = /^https:\/\/(upload\.wikimedia\.org|thumb\.wikimedia\.org|commons\.wikimedia\.org)\//i;
-
-function RemoteImage({ alt, href, t }) {
-  // Модель пишет img:запрос, а не URL: так нельзя получить выдуманную ссылку.
-  const query = href.startsWith("img:") ? href.slice(4).trim() : "";
-  const direct = !query && COMMONS_HOST.test(href) ? href : "";
-  const [found, setFound] = useState(null);
-  const [loading, setLoading] = useState(Boolean(query));
-  const [broken, setBroken] = useState(false);
-
-  useEffect(() => {
-    if (!query) return undefined;
-    let alive = true;
-    fetch(commonsSearchUrl(query))
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => { if (alive) setFound(pickCommonsImage(json)); })
-      .catch(() => { if (alive) setFound(null); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [query]);
-
-  const src = direct || found?.src;
-  if (loading) return <div style={{ color: t.sub, fontSize: 12, margin: "8px 0" }}>Подбираю картинку…</div>;
-  if (!src || broken) {
-    return (
-      <a href={direct || found?.source || "https://commons.wikimedia.org/"} target="_blank" rel="noreferrer" style={{ color: t.invBg, fontSize: 12 }}>
-        {alt || query || "Картинка"} — источник
-      </a>
-    );
-  }
-  const source = found?.source || direct;
-  const caption = [alt || found?.title, found?.license].filter(Boolean).join(" · ");
-  return (
-    <figure style={{ margin: "12px 0" }}>
-      <img
-        src={src}
-        alt={alt || found?.title || "Рисунок"}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        onError={() => setBroken(true)}
-        style={{ width: "100%", display: "block", borderRadius: 12, border: `1px solid ${t.border}` }}
-      />
-      <figcaption style={{ color: t.sub, fontSize: 11, lineHeight: 1.4, marginTop: 6 }}>
-        {source ? <a href={source} target="_blank" rel="noreferrer" style={{ color: t.invBg }}>{caption || "Wikimedia Commons"}</a> : caption}
-      </figcaption>
-    </figure>
   );
 }
 
