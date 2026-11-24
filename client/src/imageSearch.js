@@ -1,20 +1,5 @@
 const API = "https://commons.wikimedia.org/w/api.php";
 
-/** Только конкретные, заранее проверенные запросы — модель не придумывает тему картинки. */
-export const ALLOWED_IMAGE_QUERIES = [
-  "график функции",
-  "схема графа",
-  "митохондрия схема",
-  "строение клетки",
-  "парабола график",
-  "синус график",
-];
-
-export function isAllowedImageQuery(query) {
-  const norm = String(query || "").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
-  return ALLOWED_IMAGE_QUERIES.includes(norm);
-}
-
 /** Без ключа и без CORS-прокси: Commons отдаёт origin=*. */
 export function commonsSearchUrl(query) {
   const u = new URL(API);
@@ -54,8 +39,6 @@ export function pickCommonsImage(json) {
     const src = https(info.thumburl) || https(info.url);
     if (!src) continue;
     const meta = info.extmetadata || {};
-    const haystack = `${page.title || ""} ${meta.ImageDescription?.value || ""}`;
-    if (/газет|newspaper|journal|magazine|periodical|press|тираж|выпуск/i.test(haystack)) continue;
     return {
       src,
       source: https(info.descriptionurl),

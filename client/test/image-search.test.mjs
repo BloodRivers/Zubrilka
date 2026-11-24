@@ -1,10 +1,6 @@
 // Подбор картинки для конспекта: node client/test/image-search.test.mjs
 import assert from "node:assert/strict";
-import { commonsSearchUrl, isAllowedImageQuery, pickCommonsImage } from "../src/imageSearch.js";
-
-assert.equal(isAllowedImageQuery("График функции"), true);
-assert.equal(isAllowedImageQuery("схема графа."), true);
-assert.equal(isAllowedImageQuery("исследование функции"), false);
+import { commonsSearchUrl, pickCommonsImage } from "../src/imageSearch.js";
 
 const url = new URL(commonsSearchUrl("схема графа"));
 assert.equal(url.origin, "https://commons.wikimedia.org");
@@ -32,12 +28,5 @@ assert.equal(image.author, "Frap");
 
 assert.equal(pickCommonsImage({}), null);
 assert.equal(pickCommonsImage({ query: { pages: { 1: { imageinfo: [{ thumburl: "http://bad.example/x.png" }] } } } }), null);
-assert.equal(pickCommonsImage({ query: { pages: { 1: {
-  title: "File:Газета.jpg",
-  imageinfo: [{
-    thumburl: "https://thumb.wikimedia.org/newspaper.png",
-    extmetadata: { ImageDescription: { value: "Старая газета" } },
-  }],
-} } } }), null);
 
 console.log("ok: commons image search");

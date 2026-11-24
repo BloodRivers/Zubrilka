@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { katexHtml } from "../utils";
-import { commonsSearchUrl, isAllowedImageQuery, pickCommonsImage } from "../imageSearch";
+import { commonsSearchUrl, pickCommonsImage } from "../imageSearch";
 
 function parseInline(src) {
   const s = String(src || "");
@@ -378,7 +378,7 @@ function RemoteImage({ alt, href, t }) {
   const [broken, setBroken] = useState(false);
 
   useEffect(() => {
-    if (!query || !isAllowedImageQuery(query)) return undefined;
+    if (!query) return undefined;
     let alive = true;
     fetch(commonsSearchUrl(query))
       .then((r) => (r.ok ? r.json() : null))
@@ -389,7 +389,6 @@ function RemoteImage({ alt, href, t }) {
   }, [query]);
 
   const src = direct || found?.src;
-  if (query && !isAllowedImageQuery(query)) return null;
   if (loading) return <div style={{ color: t.sub, fontSize: 12, margin: "8px 0" }}>Подбираю картинку…</div>;
   if (!src || broken) {
     return (
