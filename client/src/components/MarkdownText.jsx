@@ -239,7 +239,7 @@ function Inline({ nodes, t, k }) {
             const theme = badgeTheme(n.label);
             if (!theme) return <span key={key}>{`[[${n.label}]]`}</span>;
             return (
-              <span key={key} style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, background: t[theme[0]], color: t[theme[1]], fontSize: 11, fontWeight: 700, marginRight: 6, verticalAlign: "middle", whiteSpace: "nowrap" }}>
+              <span key={key} style={{ display: "flex", width: "fit-content", alignItems: "center", padding: "2px 8px", borderRadius: 999, background: t[theme[0]], color: t[theme[1]], fontSize: 11, fontWeight: 700, margin: "6px 0 4px", whiteSpace: "nowrap" }}>
                 {n.label}
               </span>
             );
