@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { katexHtml } from "../utils";
+import { useTheme } from "../theme/ThemeContext";
 
 export function splitMath(text) {
   const nodes = [];
@@ -48,6 +49,7 @@ export function splitMath(text) {
 }
 
 export default function MathText({ text, style, as: Tag = "div" }) {
+  const { t } = useTheme();
   const nodes = useMemo(() => splitMath(text), [text]);
   return (
     <Tag style={style}>
@@ -60,7 +62,10 @@ export default function MathText({ text, style, as: Tag = "div" }) {
             dangerouslySetInnerHTML={{
               __html: katexHtml(n.value, n.type === "block"),
             }}
-            style={n.type === "block" ? { display: "block", margin: "10px 0", overflowX: "auto" } : undefined}
+            style={{
+              ...(n.type === "block" ? { display: "block", margin: "10px 0", overflowX: "auto" } : {}),
+              color: t.text,
+            }}
           />
         )
       )}

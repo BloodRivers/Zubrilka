@@ -56,6 +56,9 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease, box-shadow 300ms ease !important;
 }
 
+/* KaTeX может вставить свой color через \color — формулы должны слушаться темы. */
+.katex, .katex * { color: inherit !important; }
+
 @keyframes stream {
   0% { transform: translateX(-120%); }
   100% { transform: translateX(120%); }

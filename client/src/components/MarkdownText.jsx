@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { katexHtml } from "../utils";
-import { commonsSearchUrl, pickCommonsImage } from "../imageSearch";
+import { commonsSearchUrl, isAllowedImageQuery, pickCommonsImage } from "../imageSearch";
 
 function parseInline(src) {
   const s = String(src || "");
@@ -198,13 +198,7 @@ function parseBlocks(src) {
         }
         const indent = m[1].replace(/\t/g, "  ").length;
         const ordered = /^\d/.test(m[2]);
-        const task = /^\[([ xX])\]\s+(.*)$/.exec(m[3]);
-        const item = {
-          text: task ? task[2] : m[3],
-          ordered,
-          checked: task ? /[xX]/.test(task[1]) : null,
-          items: [],
-        };
+        const item = { text: m[3], ordered, items: [] };
         while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
         stack[stack.length - 1].items.push(item);
         stack.push({ indent, items: item.items });
@@ -251,7 +245,10 @@ function Inline({ nodes, t, k }) {
               <span
                 key={key}
                 dangerouslySetInnerHTML={{ __html: katexHtml(n.value, n.display) }}
-                style={n.display ? { display: "block", margin: "10px 0", overflowX: "auto" } : undefined}
+                style={{
+                  ...(n.display ? { display: "block", margin: "10px 0", overflowX: "auto" } : {}),
+                  color: t.text,
+                }}
               />
             );
           case "code":
@@ -287,9 +284,7 @@ function List({ items, t, k }) {
         const key = `${k}-${i}`;
         return (
           <div key={key} style={{ display: "flex", gap: 8, padding: "3px 0", lineHeight: 1.5 }}>
-            <span style={{ color: t.sub, flexShrink: 0, fontWeight: 600 }}>
-              {item.checked === null ? (item.ordered ? `${i + 1}.` : "•") : (item.checked ? "☑" : "☐")}
-            </span>
+            <span style={{ color: t.sub, flexShrink: 0, fontWeight: 600 }}>{item.ordered ? `${i + 1}.` : "•"}</span>
             <div style={{ flex: 1, minWidth: 0, whiteSpace: "pre-wrap" }}>
               <div style={{ color: t.text }}>
                 <Inline nodes={parseInline(item.text)} t={t} k={key} />
@@ -383,7 +378,7 @@ function RemoteImage({ alt, href, t }) {
   const [broken, setBroken] = useState(false);
 
   useEffect(() => {
-    if (!query) return undefined;
+    if (!query || !isAllowedImageQuery(query)) return undefined;
     let alive = true;
     fetch(commonsSearchUrl(query))
       .then((r) => (r.ok ? r.json() : null))
@@ -394,6 +389,7 @@ function RemoteImage({ alt, href, t }) {
   }, [query]);
 
   const src = direct || found?.src;
+  if (query && !isAllowedImageQuery(query)) return null;
   if (loading) return <div style={{ color: t.sub, fontSize: 12, margin: "8px 0" }}>Подбираю картинку…</div>;
   if (!src || broken) {
     return (
@@ -447,7 +443,7 @@ export default function MarkdownText({ text, t, style }) {
               </pre>
             );
           case "math":
-            return <div key={k} dangerouslySetInnerHTML={{ __html: katexHtml(b.value, true) }} style={{ overflowX: "auto", margin: "12px 0" }} />;
+            return <div key={k} dangerouslySetInnerHTML={{ __html: katexHtml(b.value, true) }} style={{ overflowX: "auto", margin: "12px 0", color: t.text }} />;
           case "list":
             return <div key={k} style={{ margin: "8px 0" }}><List items={b.items} t={t} k={k} /></div>;
           case "table":

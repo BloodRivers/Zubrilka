@@ -1,12 +1,16 @@
 // Подбор картинки для конспекта: node client/test/image-search.test.mjs
 import assert from "node:assert/strict";
-import { commonsSearchUrl, pickCommonsImage } from "../src/imageSearch.js";
+import { commonsSearchUrl, isAllowedImageQuery, pickCommonsImage } from "../src/imageSearch.js";
 
-const url = new URL(commonsSearchUrl("граф схема"));
+assert.equal(isAllowedImageQuery("График функции"), true);
+assert.equal(isAllowedImageQuery("схема графа."), true);
+assert.equal(isAllowedImageQuery("исследование функции"), false);
+
+const url = new URL(commonsSearchUrl("схема графа"));
 assert.equal(url.origin, "https://commons.wikimedia.org");
 assert.equal(url.searchParams.get("gsrnamespace"), "6");
 assert.equal(url.searchParams.get("origin"), "*");
-assert.equal(url.searchParams.get("gsrsearch"), "граф схема");
+assert.equal(url.searchParams.get("gsrsearch"), "схема графа");
 
 const image = pickCommonsImage({
   query: { pages: {
@@ -28,5 +32,12 @@ assert.equal(image.author, "Frap");
 
 assert.equal(pickCommonsImage({}), null);
 assert.equal(pickCommonsImage({ query: { pages: { 1: { imageinfo: [{ thumburl: "http://bad.example/x.png" }] } } } }), null);
+assert.equal(pickCommonsImage({ query: { pages: { 1: {
+  title: "File:Газета.jpg",
+  imageinfo: [{
+    thumburl: "https://thumb.wikimedia.org/newspaper.png",
+    extmetadata: { ImageDescription: { value: "Старая газета" } },
+  }],
+} } } }), null);
 
 console.log("ok: commons image search");
