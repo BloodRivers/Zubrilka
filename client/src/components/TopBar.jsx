@@ -1,7 +1,7 @@
 import { ChevronLeft } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
 
-export default function TopBar({ title, onBack }) {
+export default function TopBar({ title, onBack, right }) {
   const { t } = useTheme();
   return (
     <div
@@ -43,6 +43,7 @@ export default function TopBar({ title, onBack }) {
             letterSpacing: "-0.02em",
             lineHeight: 1.1,
             flex: 1,
+            minWidth: 0,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -50,6 +51,23 @@ export default function TopBar({ title, onBack }) {
         >
           {title}
         </div>
+        {right && (
+          <div
+            style={{
+              color: t.sub,
+              fontSize: 12,
+              lineHeight: 1.2,
+              maxWidth: "48%",
+              flexShrink: 1,
+              textAlign: "right",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {right}
+          </div>
+        )}
       </div>
     </div>
   );

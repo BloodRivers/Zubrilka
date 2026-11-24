@@ -37,7 +37,7 @@ export function consumeReturnTo() {
 export function tabOf(pathname) {
   if (pathname.startsWith("/library") || pathname.startsWith("/trainer") || pathname.startsWith("/use") || pathname.startsWith("/user")) return "/library";
   if (pathname.startsWith("/settings")) return "/settings";
-  if (pathname.startsWith("/account")) return "/account";
+  if (pathname.startsWith("/account") || pathname === "/leaderboard") return "/account";
   if (
     pathname === "/"
     || pathname === "/changelog"
@@ -74,6 +74,7 @@ export function resumeTab(root) {
 export function backOf(pathname, state) {
   if (state?.from) return state.from;
   if (pathname === "/changelog") return "/";
+  if (pathname === "/leaderboard") return "/account";
   const ret = peekReturnTo();
   if (ret && /^\/(note|test|results)/.test(pathname)) return ret;
 

@@ -1,12 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { BookmarkPlus, Plus, Sparkles } from "lucide-react";
+import { BookmarkPlus, Pencil, Plus, Sparkles } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
 import Accordion from "../components/Accordion";
 import Button from "../components/Button";
 import Modal from "../components/Modal";
+import FieldLabel from "../components/FieldLabel";
 import Segmented from "../components/Segmented";
 import SharedAuthorBar from "../components/AuthorBar";
 import MathText from "../components/MathText";
@@ -15,7 +16,7 @@ import SaveToSubjectModal from "../components/SaveToSubjectModal";
 import TestEditModal from "../components/TestEditModal";
 import useLongPress from "../hooks/useLongPress";
 import { GhostNote, useGhostHold } from "../components/Ghost";
-import { getNote, listSubjects, copyNoteToSubject, listTestsForNotes, listPublicTestsForNote, updateNoteSummary } from "../api/firestore";
+import { getNote, listSubjects, copyNoteToSubject, listTestsForNotes, listPublicTestsForNote, updateNote, updateNoteSummary } from "../api/firestore";
 import { testSizeLabel, generateSummary, normalizeSummary } from "../api/backend";
 
 function testHasContent(t) {
@@ -281,6 +282,9 @@ export default function NoteDetail() {
   const [saving, setSaving] = useState(false);
   const [tests, setTests] = useState([]);
   const [editingTest, setEditingTest] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [textBusy, setTextBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const showGhost = useGhostHold(!note);
 
@@ -339,6 +343,21 @@ export default function NoteDetail() {
       alert(e?.message || "Не удалось сгенерировать конспект");
     } finally {
       setGenBusy(false);
+    }
+  };
+
+  const saveText = async () => {
+    if (!note || textBusy || !editText.trim()) return;
+    setTextBusy(true);
+    try {
+      const text = editText.trim();
+      await updateNote(note.id, { text });
+      setNote({ ...note, text });
+      setEditOpen(false);
+    } catch (e) {
+      alert(e?.message || "Не удалось сохранить текст");
+    } finally {
+      setTextBusy(false);
     }
   };
 
@@ -437,10 +456,24 @@ export default function NoteDetail() {
       )}
 
       {tab === "text" && note.text?.trim() && (
-        <MathText
-          text={note.text.trim()}
-          style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
-        />
+        <div>
+          <MathText
+            text={note.text.trim()}
+            style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
+          />
+          {!isForeign && !isGuest && (
+            <div style={{ marginTop: 18 }}>
+              <Button
+                variant="dashed"
+                onClick={() => { setEditText(note.text); setEditOpen(true); }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Pencil size={15} /> Редактировать текст
+                </span>
+              </Button>
+            </div>
+          )}
+        </div>
       )}
 
       {tab === "images" && note.images?.length > 0 && <ImageGallery images={note.images} t={t} />}
@@ -487,6 +520,42 @@ export default function NoteDetail() {
           </Button>
         )}
       </div>
+
+      <Modal
+        open={editOpen}
+        onClose={() => !textBusy && setEditOpen(false)}
+        title="Редактировать текст"
+        allowClose={() => !textBusy}
+      >
+        <FieldLabel t={t}>Текст конспекта</FieldLabel>
+        <textarea
+          value={editText}
+          onChange={(e) => setEditText(e.target.value)}
+          rows={12}
+          aria-label="Текст конспекта"
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: 12,
+            borderRadius: 14,
+            border: `1px solid ${t.border}`,
+            background: t.bg,
+            color: t.text,
+            fontFamily: "inherit",
+            fontSize: 14,
+            lineHeight: 1.5,
+            resize: "vertical",
+          }}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <Button onClick={saveText} disabled={textBusy || !editText.trim()}>
+            {textBusy ? "Сохраняю…" : "Сохранить"}
+          </Button>
+          <Button variant="dashed" onClick={() => setEditOpen(false)} disabled={textBusy}>
+            Отмена
+          </Button>
+        </div>
+      </Modal>
 
       <TestEditModal
         open={Boolean(editingTest)}

@@ -26,6 +26,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Лидерборд: только имя, фото и результаты. Пишет сам владелец строки.
+    match /leaderboard/{userId} {
+      allow read: if signedIn();
+      allow create, update, delete: if realUser() && request.auth.uid == userId;
+    }
+
     match /subjects/{id} {
       allow read: if signedIn() && resource.data.owner_id == request.auth.uid;
       allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;

@@ -64,6 +64,15 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   100% { transform: translateX(120%); }
 }
 
+@keyframes snowfall {
+  from { transform: translate3d(0, -12vh, 0); }
+  to { transform: translate3d(var(--snow-drift), 112vh, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snowflake { display: none; }
+}
+
 .rowpress { transition: opacity 160ms ease; }
 .rowpress:active { opacity: 0.5; }
 

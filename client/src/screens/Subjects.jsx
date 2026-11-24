@@ -28,7 +28,8 @@ import Modal from "../components/Modal";
 import FieldLabel from "../components/FieldLabel";
 import { GhostList, useGhostHold } from "../components/Ghost";
 import { auth } from "../firebase";
-import { listSubjects, createSubject, updateSubject, deleteSubject, countNotes } from "../api/firestore";
+import { listSubjects, createSubject, updateSubject, deleteSubject, countNotes, getUserProfile } from "../api/firestore";
+import { dueReviews } from "../progress";
 
 const ICONS = {
   Book, FlaskConical, Calculator, Languages, Globe, Atom, Landmark, Palette, Music2, Dumbbell, TrendingUp, HeartPulse, MapPin,
@@ -61,6 +62,14 @@ export const CHANGELOG = [
       "Markdown конспекта научился зачёркнутому тексту и блокам кода",
       "Формулы всегда берут цвет из темы",
       "ИИ больше не вставляет картинки в конспект — только оформление",
+      "Кнопка «Повторить слабые темы» на экране результата",
+      "Лидерборд считает долю верных ответов по лучшим попыткам",
+      "Мотивационная фраза справа в заголовке главной",
+      "Лидерборд открывается из аккаунта и показывает актуальные результаты",
+      "Блок «Повторить сегодня» на главной и серия дней подряд",
+      "Текст конспекта можно исправить прямо в конспекте",
+      "Импорт данных из выгрузки и прогресс за 7 дней в аккаунте",
+      "Незаконченный тест продолжается с того же места",
     ],
   },
   {
@@ -597,6 +606,17 @@ function Changelog({ t }) {
   );
 }
 
+const QUOTES = [
+  "Всё получится!",
+  "Ты справишься!",
+  "Сегодня — твой день!",
+  "Ещё чуть-чуть!",
+  "Не сдавайся!",
+  "Ты молодец!",
+];
+
+export const DAILY_QUOTE = QUOTES[new Date().getDate() % QUOTES.length];
+
 function GuestBanner({ t }) {
   return (
     <div
@@ -623,6 +643,8 @@ export default function Subjects() {
   const { alert } = useAlert();
   const navigate = useNavigate();
   const [subjects, setSubjects] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [streak, setStreak] = useState(0);
   const [loading, setLoading] = useState(true);
   const showGhost = useGhostHold(loading);
   const [error, setError] = useState(null);
@@ -652,6 +674,9 @@ export default function Subjects() {
         }))
       );
       setSubjects(withCounts);
+      const profile = auth.currentUser?.isAnonymous ? null : await getUserProfile().catch(() => null);
+      setReviews(dueReviews(profile).slice(0, 3));
+      setStreak(Number(profile?.streak?.days) || 0);
     } catch (e) {
       setError(e.message || "Неизвестная ошибка");
     } finally {
@@ -694,6 +719,59 @@ export default function Subjects() {
   return (
     <div>
       {auth.currentUser?.isAnonymous && <GuestBanner t={t} />}
+      {!showGhost && !auth.currentUser?.isAnonymous && reviews.length > 0 && (
+        <div
+          style={{
+            padding: "16px 18px",
+            borderRadius: 18,
+            border: `1px solid ${t.border}`,
+            background: t.surface,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>Повторить сегодня</div>
+            {streak > 0 && (
+              <div style={{ color: t.sub, fontSize: 12, whiteSpace: "nowrap" }}>{streak} дн. подряд</div>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+            {reviews.map((r) => (
+              <button
+                key={r.test_id}
+                type="button"
+                className="rowpress"
+                onClick={() =>
+                  navigate(`/test/${r.test_id}/quiz/${r.weak_topics?.length ? "weak" : "full"}`, {
+                    state: { from: "/" },
+                  })
+                }
+                style={{
+                  border: "none",
+                  background: t.raised,
+                  borderRadius: 12,
+                  padding: "10px 12px",
+                  color: t.text,
+                  fontFamily: "inherit",
+                  fontSize: 14,
+                  textAlign: "left",
+                  cursor: "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
+              >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {r.title || "Тест"}
+                </span>
+                <span style={{ color: t.sub, fontSize: 12, flexShrink: 0 }}>
+                  {r.weak_topics?.length ? "слабые темы" : "весь тест"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {showGhost ? (
         <GhostList count={5} />
       ) : error ? (

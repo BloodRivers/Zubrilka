@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from
 import { onAuthStateChanged, deleteUser, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { updateUserProfile } from "./api/firestore";
+import { updateUserProfile, syncLeaderboardEntry } from "./api/firestore";
 import { ThemeProvider, useTheme } from "./theme/ThemeContext";
 import { EASE } from "./theme/theme";
 import { AlertProvider, useAlert } from "./components/Alert";
@@ -17,8 +17,10 @@ import { rememberTab, backOf, onScreenTitle, isQuizActive, setQuizActive } from 
 import { getApiKey, setApiKey, syncAiUsage } from "./api/ai";
 import { syncPushTokenIfGranted } from "./api/push";
 import UpdateBanner from "./components/UpdateBanner";
+import Snow from "./components/Snow";
+import { showSnowOn } from "./snow";
 import Login from "./screens/Login";
-import Subjects from "./screens/Subjects";
+import Subjects, { DAILY_QUOTE } from "./screens/Subjects";
 import Trainer from "./screens/Trainer";
 import UseHub, { USE_SUBJECTS } from "./screens/UseHub";
 import OralBank from "./screens/OralBank";
@@ -30,6 +32,7 @@ import Quiz from "./screens/Quiz";
 import Results from "./screens/Results";
 import Settings from "./screens/Settings";
 import Account from "./screens/Account";
+import Leaderboard from "./screens/Leaderboard";
 import Library from "./screens/Library";
 import UserProfile from "./screens/UserProfile";
 import Legal from "./screens/Legal";
@@ -43,6 +46,7 @@ function titleFor(path) {
   if (path === "/") return "Главная";
   if (path === "/changelog") return "Что нового";
   if (path === "/account") return "Аккаунт";
+  if (path === "/leaderboard") return "Лидерборд";
   if (path === "/library") return "Библиотека";
   if (path === "/settings") return "Настройки";
   if (/\/subject\/.+\/quiz/.test(path)) return "Тест";
@@ -247,7 +251,7 @@ function GuestBlock() {
 }
 
 function Shell() {
-  const { t, theme } = useTheme();
+  const { t, theme, snowEnabled } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const { alert } = useAlert();
@@ -298,6 +302,7 @@ function Shell() {
         setUserName(stored?.name || user.displayName || (user.email || "").split("@")[0]);
         await syncAiUsage().catch(() => {});
         await syncPushTokenIfGranted().catch(() => {});
+        await syncLeaderboardEntry().catch(() => {});
       } catch {
       } finally {
         if (alive) setNameReady(true);
@@ -752,8 +757,9 @@ function Shell() {
           {location.pathname !== "/login" && (
             <TopBar
               title={screenTitle || titleFor(location.pathname)}
+              right={location.pathname === "/" ? DAILY_QUOTE : undefined}
               onBack={
-                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/use\/|\/(terms|privacy|cookies|changelog)/.test(location.pathname)
+                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/use\/|\/leaderboard|\/(terms|privacy|cookies|changelog)/.test(location.pathname)
                   ? async () => {
                       if (!(await confirmLeaveQuiz())) return;
                       const dest = backOf(location.pathname, location.state);
@@ -775,6 +781,7 @@ function Shell() {
               <Route path="/use/english/oral/:task/:variant" element={<OralTask />} />
               <Route path="/use/english/oral/:task" element={<OralBank />} />
               <Route path="/account" element={isGuest ? <GuestBlock /> : <Account />} />
+              <Route path="/leaderboard" element={isGuest ? <GuestBlock /> : <Leaderboard />} />
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings isGuest={isGuest} />} />
               <Route path="/subject/:subjectId" element={<SubjectHub />} />
@@ -795,6 +802,7 @@ function Shell() {
           {user && !legalPath && !inOralTask && <BottomNav confirmLeave={confirmLeaveQuiz} />}
           {user && !legalPath && <UpdateBanner />}
         </div>
+        {snowEnabled && showSnowOn(location.pathname) && <Snow />}
         {consentPending && !legalPath && (
           <ConsentModal
             onAccept={acceptConsent}

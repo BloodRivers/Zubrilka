@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { EASE } from "../theme/theme";
+import { plural } from "../utils";
 import Loader from "../components/Loader";
 import Avatar from "../components/Avatar";
-import { listAllUsers, listAllResults } from "../api/firestore";
+import { listLeaderboard } from "../api/firestore";
 
 const MEDAL_COLORS = ["#E5B94E", "#A9A9B8", "#C68B4E"];
 
@@ -15,27 +16,15 @@ export default function Leaderboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [allResults, allUsers] = await Promise.all([listAllResults().catch(() => []), listAllUsers().catch(() => [])]);
-        const byId = new Map((allUsers || []).map((u) => [u.id, u]));
-        const rows = new Map();
-        for (const r of allResults) {
-          if (!r.user_id) continue;
-          if (!rows.has(r.user_id))
-            rows.set(r.user_id, { id: r.user_id, name: "", email: "", photo_url: null, correct: 0, total: 0, attempts: 0 });
-          const row = rows.get(r.user_id);
-          row.correct += r.score || 0;
-          row.total += r.total || 0;
-          row.attempts += 1;
-        }
-        for (const [id, row] of rows) {
-          const u = byId.get(id);
-          row.name = u?.name || row.email || "";
-          row.email = u?.email || "";
-          row.photo_url = u?.photo_url || null;
-          if (!row.name) row.name = (u?.email || "").split("@")[0];
-        }
+        const rows = await listLeaderboard();
         setRanking(
-          [...rows.values()].sort((a, b) => b.correct - a.correct || b.attempts - a.attempts).slice(0, 20)
+          rows
+            .sort((a, b) => {
+              const pa = a.total ? a.correct / a.total : 0;
+              const pb = b.total ? b.correct / b.total : 0;
+              return pb - pa || (b.tests || 0) - (a.tests || 0);
+            })
+            .slice(0, 20)
         );
       } catch {
         setRanking([]);
@@ -52,7 +41,7 @@ export default function Leaderboard() {
       <div style={{ paddingTop: 40, textAlign: "center" }}>
         <div style={{ color: t.text, fontWeight: 600, fontSize: 15 }}>Пока пусто</div>
         <div style={{ color: t.sub, fontSize: 14, marginTop: 6, lineHeight: 1.5 }}>
-          Очки появятся после первого теста.
+          Рейтинг появится после первого теста.
         </div>
       </div>
     );
@@ -97,9 +86,14 @@ export default function Leaderboard() {
             </span>
             <Avatar name={r.name} src={r.photo_url} size={38} />
             <span style={{ flex: 1, color: mine ? t.inv : t.text, fontSize: 15, fontWeight: 600 }}>{r.name || "Без имени"}</span>
-            <span style={{ color: mine ? t.inv : t.text, fontSize: 15, fontWeight: 700 }}>
-              {r.correct}
-              <span style={{ fontWeight: 400, opacity: 0.7, fontSize: 13 }}> очков</span>
+            <span style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ color: mine ? t.inv : t.text, fontSize: 15, fontWeight: 700 }}>
+                {r.total ? Math.round((r.correct / r.total) * 100) : 0}%
+                <span style={{ fontWeight: 400, opacity: 0.7, fontSize: 13 }}> точности</span>
+              </div>
+              <div style={{ color: mine ? t.inv : t.sub, fontSize: 11, opacity: 0.8 }}>
+                {r.tests || 0} {plural(r.tests || 0, ["тест", "теста", "тестов"])}
+              </div>
             </span>
           </div>
         );

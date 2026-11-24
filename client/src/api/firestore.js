@@ -15,6 +15,9 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
+import { bestResultsByTest } from "../components/ResultCard";
+import { nextReview, nextStreak } from "../progress";
+import { remapDoc, validateImport } from "../importData";
 
 const uid = () => {
   const u = auth.currentUser?.uid;
@@ -257,10 +260,11 @@ export async function copyNoteToSubject(note, subjectId) {
   return ref;
 }
 
-export async function updateNote(id, { title, pinned }) {
+export async function updateNote(id, { title, pinned, text }) {
   const patch = {};
   if (title !== undefined) patch.title = title;
   if (pinned !== undefined) patch.pinned = pinned;
+  if (text !== undefined) patch.text = text;
   return setDoc(doc(db, "notes", id), patch, { merge: true });
 }
 
@@ -351,6 +355,22 @@ export async function deleteTest(id) {
   await batchDelete(await ownResultsRefsForTests([id]));
 }
 
+/** Планирует следующее повторение и обновляет серию в профиле. */
+export async function recordReview({ test_id, score, total, weak_topics, title, subject_id }) {
+  if (!test_id) return null;
+  const ref = doc(db, "users", uid());
+  const result = { score, total, weak_topics, title, subject_id };
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists() ? snap.data() : {};
+    const reviews = { ...(data.reviews || {}) };
+    reviews[test_id] = nextReview(reviews[test_id], result);
+    const streak = nextStreak(data.streak);
+    tx.set(ref, { reviews, streak }, { merge: true });
+    return reviews[test_id];
+  });
+}
+
 export async function saveTestResult({
   user_id,
   test_id,
@@ -368,7 +388,7 @@ export async function saveTestResult({
   written_grade,
   written_comment,
 }) {
-  return addDoc(collection(db, "test_results"), {
+  const ref = await addDoc(collection(db, "test_results"), {
     user_id,
     test_id,
     score,
@@ -386,6 +406,18 @@ export async function saveTestResult({
     written_comment: written_comment || "",
     created_at: serverTimestamp(),
   });
+  await Promise.all([
+    syncLeaderboardEntry().catch(() => {}),
+    recordReview({
+      test_id,
+      score,
+      total,
+      weak_topics,
+      title,
+      subject_id,
+    }).catch(() => {}),
+  ]);
+  return ref;
 }
 
 export async function listResults() {
@@ -588,6 +620,28 @@ export async function listAllResults() {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+/** Публичная строка лидерборда: только имя, фото и суммарные результаты. */
+export async function syncLeaderboardEntry() {
+  const u = uid();
+  if (auth.currentUser?.isAnonymous) return;
+  const [profile, results] = await Promise.all([getUserProfile().catch(() => null), listResults()]);
+  const best = bestResultsByTest(results);
+  await setDoc(doc(db, "leaderboard", u), {
+    user_id: u,
+    name: profile?.name || auth.currentUser?.displayName || "",
+    photo_url: profile?.photo_url || auth.currentUser?.photoURL || "",
+    correct: best.reduce((sum, r) => sum + (r.score || 0), 0),
+    total: best.reduce((sum, r) => sum + (r.total || 0), 0),
+    tests: best.length,
+    updated_at: serverTimestamp(),
+  });
+}
+
+export async function listLeaderboard() {
+  const snap = await getDocs(collection(db, "leaderboard"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 export async function exportUserData() {
   const subjects = await listSubjects();
   const notes = [];
@@ -615,9 +669,76 @@ export async function deleteAllUserData() {
   const results = rs.docs.map((d) => ({ id: d.id, ...d.data() }));
   const batch = writeBatch(db);
   batch.delete(doc(db, "users", uid()));
+  batch.delete(doc(db, "leaderboard", uid()));
   subjects.forEach((s) => batch.delete(doc(db, "subjects", s.id)));
   notes.forEach((n) => batch.delete(doc(db, "notes", n.id)));
   tests.forEach((t) => batch.delete(doc(db, "tests", t.id)));
   results.forEach((r) => batch.delete(doc(db, "test_results", r.id)));
   return batch.commit();
+}
+
+function importedTime(raw) {
+  if (typeof raw?.toMillis === "function") return raw;
+  if (typeof raw === "number") return new Date(raw);
+  if (typeof raw === "string") {
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? serverTimestamp() : d;
+  }
+  if (typeof raw?.seconds === "number") return new Date(raw.seconds * 1000);
+  return serverTimestamp();
+}
+
+/** Восстанавливает выгрузку в текущий аккаунт. Ключ Polza и настройки не трогает. */
+export async function importUserData(data) {
+  validateImport(data);
+  const me = uid();
+  const alloc = (kind, items) => items.map((old) => ({ old, ref: doc(collection(db, kind)) }));
+  const plans = {
+    subjects: alloc("subjects", data.subjects),
+    notes: alloc("notes", data.notes),
+    tests: alloc("tests", data.tests),
+  };
+  const ids = Object.fromEntries(
+    Object.entries(plans).map(([kind, list]) => [kind, new Map(list.map((p) => [p.old.id, p.ref.id]))])
+  );
+  const clean = {
+    public: false,
+    published_at: null,
+    author_name: "",
+    author_uid: "",
+    author_photo_url: "",
+    subject_name: "",
+  };
+  for (const [kind, extra] of Object.entries({ subjects: clean, notes: clean, tests: clean })) {
+    for (const { old, ref } of plans[kind]) {
+      await setDoc(ref, {
+        ...remapDoc(old, ids),
+        owner_id: me,
+        created_at: serverTimestamp(),
+        ...extra,
+      });
+    }
+  }
+  for (const old of data.results) {
+    await addDoc(collection(db, "test_results"), {
+      ...remapDoc(old, ids),
+      user_id: me,
+      created_at: importedTime(old.created_at),
+    });
+  }
+  if (data.profile?.reviews) {
+    const reviews = {};
+    for (const [oldId, review] of Object.entries(data.profile.reviews)) {
+      const newId = ids.tests.get(oldId);
+      if (newId) reviews[newId] = review;
+    }
+    if (Object.keys(reviews).length) await setDoc(doc(db, "users", me), { reviews }, { merge: true });
+  }
+  await syncLeaderboardEntry().catch(() => {});
+  return {
+    subjects: plans.subjects.length,
+    notes: plans.notes.length,
+    tests: plans.tests.length,
+    results: data.results.length,
+  };
 }

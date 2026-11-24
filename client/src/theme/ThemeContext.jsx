@@ -5,6 +5,7 @@ const ThemeContext = createContext();
 const STORAGE_KEY = "zubrilka:theme";
 const STYLE_KEY = "zubrilka:note-style";
 const CODE_LIGATURES_KEY = "zubrilka:code-ligatures";
+const SNOW_KEY = "zubrilka:snow";
 const systemDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
 
 export function ThemeProvider({ children }) {
@@ -17,6 +18,7 @@ export function ThemeProvider({ children }) {
     return saved === "headings" ? "headings" : "accordion";
   });
   const [codeLigatures, setCodeLigaturesRaw] = useState(() => localStorage.getItem(CODE_LIGATURES_KEY) !== "0");
+  const [snowEnabled, setSnowEnabledRaw] = useState(() => localStorage.getItem(SNOW_KEY) !== "0");
   const [sysDark, setSysDark] = useState(systemDark);
   const animTimer = useRef(null);
 
@@ -41,6 +43,11 @@ export function ThemeProvider({ children }) {
     setCodeLigaturesRaw(next);
   }, []);
 
+  const setSnowEnabled = useCallback((next) => {
+    localStorage.setItem(SNOW_KEY, next ? "1" : "0");
+    setSnowEnabledRaw(next);
+  }, []);
+
   const changePref = useCallback((next) => {
     document.documentElement.classList.add("theme-anim");
     void document.body.offsetWidth;
@@ -53,8 +60,8 @@ export function ThemeProvider({ children }) {
 
   const theme = pref === "system" ? (sysDark ? "dark" : "light") : pref;
   const value = useMemo(
-    () => ({ pref, theme, setPref: changePref, noteStyle, setNoteStyle, codeLigatures, setCodeLigatures, t: THEMES[theme] }),
-    [pref, theme, changePref, noteStyle, setNoteStyle, codeLigatures, setCodeLigatures]
+    () => ({ pref, theme, setPref: changePref, noteStyle, setNoteStyle, codeLigatures, setCodeLigatures, snowEnabled, setSnowEnabled, t: THEMES[theme] }),
+    [pref, theme, changePref, noteStyle, setNoteStyle, codeLigatures, setCodeLigatures, snowEnabled, setSnowEnabled]
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

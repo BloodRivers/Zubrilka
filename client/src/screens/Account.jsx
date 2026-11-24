@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { signOut, deleteUser } from "firebase/auth";
-import { Download, Camera, Pencil } from "lucide-react";
+import { Download, Upload, Camera, Pencil, ChevronRight, Trophy } from "lucide-react";
 import { auth } from "../firebase";
 import { useTheme } from "../theme/ThemeContext";
 import { useAlert } from "../components/Alert";
+import { plural } from "../utils";
 import { Bone, useGhostHold } from "../components/Ghost";
 import Avatar from "../components/Avatar";
-import { getUserProfile, updateUserProfile, exportUserData, deleteAllUserData, countPublishedContent } from "../api/firestore";
+import { getUserProfile, updateUserProfile, syncLeaderboardEntry, exportUserData, importUserData, deleteAllUserData, countPublishedContent, listResults } from "../api/firestore";
+import { weeklyStats } from "../progress";
 import { downscaleImageFile } from "../api/files";
 
 const row = (t) => ({
@@ -69,13 +72,17 @@ function StatsCard({ t, label, value, hint }) {
 export default function Account() {
   const { t } = useTheme();
   const { alert } = useAlert();
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [profile, setProfile] = useState(null);
   const [ready, setReady] = useState(false);
   const [stats, setStats] = useState(null);
+  const [weekly, setWeekly] = useState({ tests: 0, accuracy: 0 });
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const showGhost = useGhostHold(!ready);
   const fileRef = useRef(null);
+  const importRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -83,8 +90,12 @@ export default function Account() {
         const me = await getUserProfile().catch(() => null);
         setProfile(me || {});
         setName(me?.name || auth.currentUser?.displayName || "");
-        const st = await countPublishedContent().catch(() => null);
+        const [st, results] = await Promise.all([
+          countPublishedContent().catch(() => null),
+          listResults().catch(() => []),
+        ]);
         setStats(st);
+        setWeekly(weeklyStats(results));
       } catch {
         setProfile({});
       } finally {
@@ -99,6 +110,7 @@ export default function Account() {
       if (!v || v === profile?.name) return;
       try {
         await updateUserProfile({ name: v });
+        await syncLeaderboardEntry().catch(() => {});
         setProfile((p) => ({ ...p, name: v }));
       } catch (err) {
         alert("Не удалось сохранить имя: " + (err?.message ?? ""));
@@ -118,6 +130,7 @@ export default function Account() {
     try {
       const dataUrl = await downscaleImageFile(file, 128);
       await updateUserProfile({ photo_url: dataUrl });
+      await syncLeaderboardEntry().catch(() => {});
       setProfile((p) => ({ ...p, photo_url: dataUrl }));
     } catch (err) {
       alert("Не удалось загрузить фото: " + (err?.message ?? ""));
@@ -139,6 +152,33 @@ export default function Account() {
     } catch (err) {
       alert("Не удалось выгрузить данные: " + (err?.message ?? ""));
     }
+  };
+
+  const pickImport = () => importRef.current?.click();
+
+  const onImportFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || importBusy) return;
+    alert("Предметы, конспекты и тесты из файла будут добавлены к текущим. Продолжить?", {
+      title: "Импорт данных",
+      confirmLabel: "Импортировать",
+      onConfirm: async () => {
+        setImportBusy(true);
+        try {
+          const data = JSON.parse(await file.text());
+          const counts = await importUserData(data);
+          alert(
+            `Восстановлено: ${counts.subjects} предметов, ${counts.notes} конспектов, ${counts.tests} тестов, ${counts.results} результатов.`,
+            { title: "Готово" }
+          );
+        } catch (err) {
+          alert("Не удалось импортировать: " + (err?.message ?? ""));
+        } finally {
+          setImportBusy(false);
+        }
+      },
+    });
   };
 
   const confirmDelete = () =>
@@ -256,6 +296,41 @@ export default function Account() {
         <StatsCard t={t} label="конспектов" value={stats?.notes ?? 0} hint="опубликовано" />
         <StatsCard t={t} label="тестов" value={stats?.tests ?? 0} hint="опубликовано" />
       </div>
+      <div
+        style={{
+          ...row(t),
+          marginTop: 8,
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: 4,
+        }}
+      >
+        <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>За 7 дней</div>
+        <div style={{ color: t.sub, fontSize: 13 }}>
+          {weekly.tests} {plural(weekly.tests, ["тест", "теста", "тестов"])} · {weekly.accuracy}% точности · серия {profile?.streak?.days || 0} дн.
+        </div>
+      </div>
+      <button
+        className="rowpress"
+        onClick={() => navigate("/leaderboard")}
+        style={{
+          width: "100%",
+          marginTop: 8,
+          ...row(t),
+          color: t.text,
+          fontSize: 15,
+          fontFamily: "inherit",
+          cursor: "pointer",
+          textAlign: "left",
+          justifyContent: "space-between",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Trophy size={16} color={t.sub} />
+          Лидерборд
+        </span>
+        <ChevronRight size={16} color={t.sub} />
+      </button>
 
       <div style={sectionTitle(t)}>Данные</div>
       <button
@@ -274,6 +349,33 @@ export default function Account() {
       >
         Экспорт данных
         <Download size={16} color={t.sub} />
+      </button>
+      <input
+        ref={importRef}
+        type="file"
+        accept="application/json,.json"
+        onChange={onImportFile}
+        style={{ display: "none" }}
+      />
+      <button
+        className="rowpress"
+        onClick={pickImport}
+        disabled={importBusy}
+        style={{
+          width: "100%",
+          marginTop: 8,
+          ...row(t),
+          color: t.text,
+          fontSize: 15,
+          fontFamily: "inherit",
+          cursor: importBusy ? "default" : "pointer",
+          opacity: importBusy ? 0.6 : 1,
+          textAlign: "left",
+          justifyContent: "space-between",
+        }}
+      >
+        Импорт данных
+        <Upload size={16} color={t.sub} />
       </button>
 
       <div style={sectionTitle(t)}>Опасная зона</div>

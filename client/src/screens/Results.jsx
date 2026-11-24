@@ -120,6 +120,16 @@ export default function Results() {
               </div>
             </div>
           ))}
+          {testId && (
+            <div style={{ marginTop: 14 }}>
+              <Button
+                variant="dashed"
+                onClick={() => navigate(`/test/${testId}/quiz/weak`, { state: { from } })}
+              >
+                Повторить слабые темы
+              </Button>
+            </div>
+          )}
         </>
       ) : (
         total > 0 && <div style={{ color: t.sub, fontSize: 14, padding: "10px 0" }}>Все темы усвоены уверенно.</div>

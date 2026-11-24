@@ -93,7 +93,7 @@ const input = (t) => ({
 });
 
 export default function Settings({ isGuest }) {
-  const { pref, setPref, t, theme, noteStyle, setNoteStyle } = useTheme();
+  const { pref, setPref, t, theme, noteStyle, setNoteStyle, snowEnabled, setSnowEnabled } = useTheme();
   const { alert } = useAlert();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -274,6 +274,24 @@ export default function Settings({ isGuest }) {
         <Switch on={sfxOn} />
       </button>
 
+      <button
+        type="button"
+        className="press"
+        onClick={() => setSnowEnabled(!snowEnabled)}
+        style={{
+          width: "100%",
+          ...row(t),
+          justifyContent: "space-between",
+          gap: 12,
+          marginTop: 8,
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        <span style={{ color: t.text, fontSize: 15 }}>Снег</span>
+        <Switch on={snowEnabled} />
+      </button>
+
       <div
         style={{
           ...row(t),
@@ -335,7 +353,7 @@ export default function Settings({ isGuest }) {
         style={{
           ...row(t),
           flexDirection: "column",
-          alignItems: "flex-start",
+          alignItems: "stretch",
           gap: 8,
           marginBottom: 8,
         }}
@@ -343,51 +361,50 @@ export default function Settings({ isGuest }) {
         <div style={{ color: t.text, fontSize: 15, fontWeight: 600 }}>
           Polza AI · свой ключ (BYOK)
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <KeyRound size={16} color={t.sub} style={{ flexShrink: 0 }} />
+          <input
+            type="password"
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            onBlur={async () => {
+              const key = await persistKey(keyInput);
+              setBalanceKey(key);
+            }}
+            placeholder="Вставь ключ из polza.ai"
+            style={input(t)}
+          />
+          <button
+            className="rowpress"
+            onClick={async () => {
+              try {
+                const txt = (await navigator.clipboard.readText()).trim();
+                if (!txt) return;
+                setKeyInput(txt);
+                const key = await persistKey(txt);
+                setBalanceKey(key);
+              } catch {}
+            }}
+            style={{
+              border: "none",
+              background: t.invBg,
+              color: t.inv,
+              fontSize: 14,
+              fontWeight: 600,
+              fontFamily: "inherit",
+              padding: "8px 14px",
+              borderRadius: 999,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            Вставить
+          </button>
+        </div>
         <div style={{ color: t.sub, fontSize: 13, lineHeight: 1.45 }}>
           API Ключ синхронизируется между устройствами через аккаунт.
           Лимит: {aiUsedToday()}/{AI_DAILY_LIMIT} запросов сегодня.
         </div>
-      </div>
-
-      <div style={{ ...row(t), gap: 10, marginBottom: 8 }}>
-        <KeyRound size={16} color={t.sub} style={{ flexShrink: 0 }} />
-        <input
-          type="password"
-          value={keyInput}
-          onChange={(e) => setKeyInput(e.target.value)}
-          onBlur={async () => {
-            const key = await persistKey(keyInput);
-            setBalanceKey(key);
-          }}
-          placeholder="Вставь ключ из polza.ai"
-          style={input(t)}
-        />
-        <button
-          className="rowpress"
-          onClick={async () => {
-            try {
-              const txt = (await navigator.clipboard.readText()).trim();
-              if (!txt) return;
-              setKeyInput(txt);
-              const key = await persistKey(txt);
-              setBalanceKey(key);
-            } catch {}
-          }}
-          style={{
-            border: "none",
-            background: t.invBg,
-            color: t.inv,
-            fontSize: 14,
-            fontWeight: 600,
-            fontFamily: "inherit",
-            padding: "8px 14px",
-            borderRadius: 999,
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-        >
-          Вставить
-        </button>
       </div>
 
       <button

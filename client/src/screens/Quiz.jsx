@@ -21,6 +21,7 @@ import { onAIStatus, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import MarkedAnswer from "../components/MarkedAnswer";
 import { sfx } from "../sfx";
 import { setQuizActive } from "../nav";
+import { clearDraft, readDraft, writeDraft } from "../quizDraft";
 
 const GEN_PHRASES = ["Формулирую вопросы…", "Подбираю короткие варианты…", "Собираю квизлет…"];
 const MODE_OPTS = [
@@ -243,6 +244,7 @@ export default function Quiz() {
   const [matchWrong, setMatchWrong] = useState(null);
   const [matchRightOrder, setMatchRightOrder] = useState([]);
   const [flash, setFlash] = useState([]);
+  const [resumed, setResumed] = useState(false);
   const forceCreate = Boolean(location.state?.create);
 
   const testIdRef = useRef(null);
@@ -251,6 +253,7 @@ export default function Quiz() {
   const subjectIdRef = useRef(subjectId || null);
   const noteTextRef = useRef("");
   const pendingRef = useRef(null);
+  const bundleRef = useRef(null);
   const answersRef = useRef([]);
   const quizKnownRef = useRef([]);
   const marksRef = useRef([]);
@@ -284,6 +287,8 @@ export default function Quiz() {
       next = { ...next, questions: qs };
     }
     setBundle(next);
+    bundleRef.current = next;
+    if (!opts.draft) setResumed(false);
 
     if (qs.length) setSection("choice");
     else if (next.quizlet?.length) setSection("quizlet");
@@ -318,6 +323,30 @@ export default function Quiz() {
     } else {
       setMatchRightOrder([]);
     }
+    if (opts.draft) {
+      const d = opts.draft;
+      setSection(d.section || section);
+      setQIndex(Math.min(d.qIndex || 0, Math.max(0, (next.questions || []).length - 1)));
+      setQuizIdx(Math.min(d.quizIdx || 0, Math.max(0, (next.quizlet || []).length - 1)));
+      answersRef.current = Array.isArray(d.answers) ? d.answers : [];
+      setAnswers(answersRef.current);
+      quizKnownRef.current = Array.isArray(d.quizKnown) ? d.quizKnown : [];
+      setQuizKnown(quizKnownRef.current);
+      setWrittenAnswers(Array.isArray(d.writtenAnswers) ? d.writtenAnswers : []);
+      setWrittenResult(d.writtenResult || null);
+      const marks = Array.isArray(d.writtenMarks) ? d.writtenMarks : [];
+      marksRef.current = marks;
+      setWrittenMarks(marks);
+      matchOkRef.current = Array.isArray(d.matchOk) ? d.matchOk : [];
+      setMatchRound(d.matchRound || 0);
+      setMatchDone(Array.isArray(d.matchDone) ? d.matchDone : []);
+      setMatchTainted(Array.isArray(d.matchTainted) ? d.matchTainted : []);
+      setMatchWrong(d.matchWrong ?? null);
+      if (Array.isArray(d.matchRightOrder) && d.matchRightOrder.length) setMatchRightOrder(d.matchRightOrder);
+      setPicked(null);
+      setMultiPick([]);
+      setResumed(true);
+    }
     setPhase("ready");
   };
 
@@ -351,6 +380,7 @@ export default function Quiz() {
             title: test?.title || "",
             subjectId: test?.subject_id || null,
             weakTopics: mode === "weak" ? latest?.weak_topics || null : null,
+            draft: readDraft(testId, mode),
           });
           if (writtenQuestionsOf(b.written).length) {
             const noteIds = test?.note_ids || [];
@@ -397,6 +427,41 @@ export default function Quiz() {
       }
     })();
   }, [noteId, testId, mode, subjectId, forceCreate]);
+
+  useEffect(() => {
+    if (!testId || phase !== "ready" || !bundle) return;
+    writeDraft(testId, mode, {
+      section,
+      qIndex,
+      quizIdx,
+      quizKnown,
+      writtenAnswers,
+      writtenResult,
+      writtenMarks,
+      matchRound,
+      matchDone,
+      matchTainted,
+      matchWrong,
+      matchOk: matchOkRef.current,
+      matchRightOrder,
+      answers: answersRef.current,
+    });
+  }, [
+    testId, mode, phase, bundle, section, qIndex, quizIdx, quizKnown,
+    writtenAnswers, writtenResult, writtenMarks, matchRound, matchDone,
+    matchTainted, matchWrong, matchRightOrder, answers,
+  ]);
+
+  const restartQuiz = () => {
+    if (!testIdRef.current || !bundleRef.current) return;
+    clearDraft(testIdRef.current, mode);
+    startBundle(bundleRef.current, {
+      testId: testIdRef.current,
+      noteIds: noteIdsRef.current,
+      title: titleRef.current,
+      subjectId: subjectIdRef.current,
+    });
+  };
 
   const toggleMode = (id) => {
     setModes((prev) => {
@@ -514,6 +579,7 @@ export default function Quiz() {
       }
     }
 
+    if (testIdRef.current) clearDraft(testIdRef.current, mode);
     setQuizActive(false);
     navigate("/results", {
       state: {
@@ -1031,6 +1097,28 @@ export default function Quiz() {
     return segs;
   })();
 
+  const resumeBar = resumed ? (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <span style={{ color: t.sub, fontSize: 12 }}>Продолжаем с того места</span>
+      <button
+        type="button"
+        className="press"
+        onClick={restartQuiz}
+        style={{
+          border: "none",
+          background: "none",
+          color: t.sub,
+          fontSize: 12,
+          fontFamily: "inherit",
+          cursor: "pointer",
+          textDecoration: "underline",
+        }}
+      >
+        Начать заново
+      </button>
+    </div>
+  ) : null;
+
   if (section === "choice") {
     const q = bundle.questions[qIndex];
     if (!q) { navigate("/"); return null; }
@@ -1042,6 +1130,7 @@ export default function Quiz() {
         {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
+        {resumeBar}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
           <div style={{ color: t.sub, fontSize: 13 }}>
             Вопрос {qIndex + 1} из {bundle.questions.length}
@@ -1149,6 +1238,7 @@ export default function Quiz() {
         {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
+        {resumeBar}
         <div style={{ color: t.sub, fontSize: 13, marginBottom: 12 }}>Квизлет {quizIdx + 1} из {bundle.quizlet.length}</div>
         <div className="quizlet-scene">
           <div
@@ -1239,6 +1329,7 @@ export default function Quiz() {
         {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
+        {resumeBar}
         <div style={{ color: t.sub, fontSize: 13, marginBottom: 8 }}>
           Сопоставь · раунд {matchRound + 1} из {totalRounds}
         </div>
@@ -1301,6 +1392,7 @@ export default function Quiz() {
         {authorBar}
         {saveBar}
         <ProgressBar segments={progressSegments} />
+        {resumeBar}
         <div style={{ color: t.sub, fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
           Письменный ответ{questions.length > 1 ? ` · ${questions.length}` : ""}
         </div>
