@@ -1,93 +1,35 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
-import { shuffle } from "../utils";
 import ProgressBar from "../components/ProgressBar";
 import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
-import MarkdownText from "../components/MarkdownText";
 import BackToTop from "../components/BackToTop";
-import { ChevronDown } from "lucide-react";
-import { Stat, TRAINER_LIST } from "./StressTrainer";
-import { sfx } from "../sfx";
+import TheoryCard from "../components/TheoryCard";
+import Stat from "../components/Stat";
+import { TRAINER_LIST } from "../data/trainers";
+import useQuizQueue from "../hooks/useQuizQueue";
 import { setQuizActive } from "../nav";
 import { NN_ITEMS, NN_THEORY } from "../data/nn";
 
 const TOTAL = NN_ITEMS.length;
-
-function TheoryCard({ group, t }) {
-  const [open, setOpen] = useState(true);
-  const danger = group.tone === "danger";
-  return (
-    <div style={{ borderRadius: 20, border: `1px solid ${danger ? t.danger : t.border}`, background: danger ? t.dangerTint : t.surface, overflow: "hidden" }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-          width: "100%", padding: "16px 18px", background: "none", border: "none",
-          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-        }}
-      >
-        <span style={{ color: danger ? t.danger : t.text, fontSize: 16, fontWeight: 700 }}>{group.title}</span>
-        <ChevronDown
-          size={18}
-          color={danger ? t.danger : t.sub}
-          style={{ flex: "0 0 auto", transform: open ? "rotate(180deg)" : "none", transition: "transform 240ms ease" }}
-        />
-      </button>
-      <div className={`accordion${open ? " open" : ""}`}>
-        <div className="accordion-inner">
-          <div style={{ padding: "0 18px 14px" }}>
-            <MarkdownText text={group.md} t={t} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function NnTrainer() {
   const { t } = useTheme();
   const navigate = useNavigate();
   const { slug } = useParams();
   const trainer = TRAINER_LIST.find((x) => x.id === slug);
-  const queueRef = useRef([]);
-  const wrongRef = useRef(new Set());
   const [tab, setTab] = useState("theory");
-  const [current, setCurrent] = useState(null);
-  const [verdict, setVerdict] = useState(null);
-  const [streak, setStreak] = useState(0);
-  const [bestStreak, setBestStreak] = useState(0);
-  const [mistakes, setMistakes] = useState(0);
-  const [done, setDone] = useState(false);
+  const { current, verdict, streak, bestStreak, mistakes, done, remaining, wrongItems, next, start, grade } = useQuizQueue(
+    NN_ITEMS,
+    (item) => item.text.replace("•", item.answer)
+  );
 
   useEffect(() => {
     setQuizActive(tab === "train" && !done);
     return () => setQuizActive(false);
   }, [tab, done]);
-
-  const next = () => {
-    const q = queueRef.current;
-    setVerdict(null);
-    if (!q.length) {
-      setCurrent(null);
-      setDone(true);
-      return;
-    }
-    setCurrent(q.shift());
-  };
-
-  const start = () => {
-    queueRef.current = shuffle(NN_ITEMS);
-    wrongRef.current = new Set();
-    setStreak(0);
-    setBestStreak(0);
-    setMistakes(0);
-    setDone(false);
-    next();
-  };
 
   useEffect(() => {
     start();
@@ -96,24 +38,7 @@ export default function NnTrainer() {
 
   const answer = (value) => {
     if (verdict || done || !current) return;
-    const correct = value === current.answer;
-    if (correct) {
-      sfx.correct();
-      const ns = streak + 1;
-      setStreak(ns);
-      setBestStreak((b) => Math.max(b, ns));
-    } else {
-      sfx.wrong();
-      setStreak(0);
-      setMistakes((m) => m + 1);
-      wrongRef.current.add(current.text.replace("•", current.answer));
-      const q = queueRef.current;
-      for (let n = 0; n < 2; n++) {
-        const pos = Math.min(q.length, Math.floor(Math.random() * (Math.min(8, q.length) + 1)));
-        q.splice(pos, 0, current);
-      }
-    }
-    setVerdict({ correct, picked: value });
+    grade(value === current.answer, value);
   };
 
   const renderTop = () => (
@@ -133,7 +58,7 @@ export default function NnTrainer() {
         {renderTop()}
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
           {NN_THEORY.map((group) => (
-            <TheoryCard key={group.title} group={group} t={t} />
+            <TheoryCard key={group.title} group={group} />
           ))}
         </div>
         <BackToTop />
@@ -141,7 +66,6 @@ export default function NnTrainer() {
     );
   }
 
-  const remaining = queueRef.current.length;
   const progress = done ? 1 : Math.min(1, Math.max(0, 1 - remaining / TOTAL));
   const [before, after] = current ? current.text.split("•") : ["", ""];
   const filled = verdict ? verdict.picked : null;
@@ -179,7 +103,7 @@ export default function NnTrainer() {
           secondLabel="Лучшая серия"
           secondValue={bestStreak}
           scoreLabel="слов пройдено"
-          wrongItems={[...wrongRef.current].map((w) => ({ key: w, label: w, badge: "повторить" }))}
+          wrongItems={wrongItems.map((w) => ({ key: w, label: w, badge: "повторить" }))}
           emptyMsg="Все слова пройдены верно."
           onRetry={start}
           onBack={trainer?.useSubject ? () => navigate(`/use/${trainer.useSubject}`) : null}

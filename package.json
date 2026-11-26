@@ -7,7 +7,7 @@
     "dev:server": "npm --prefix server run dev",
     "build": "npm --prefix client run build",
     "lint": "npm --prefix client run lint",
-    "test": "node client/test/docx.test.mjs && node client/test/parse-json.test.mjs && node client/test/pdf-images.test.mjs && node client/test/prepri.test.mjs && node client/test/nn.test.mjs && node client/test/informatics-task2.test.mjs && node client/test/badges.test.mjs && node client/test/fuzzy.test.mjs && node client/test/oral-metrics.test.mjs && node client/test/use-oral.test.mjs && node client/test/snow.test.mjs && node client/test/progress.test.mjs && node client/test/import-data.test.mjs && node client/test/quiz-draft.test.mjs",
+    "test": "node client/test/docx.test.mjs && node client/test/parse-json.test.mjs && node client/test/pdf-images.test.mjs && node client/test/prepri.test.mjs && node client/test/nn.test.mjs && node client/test/informatics-task2.test.mjs && node client/test/badges.test.mjs && node client/test/fuzzy.test.mjs && node client/test/oral-metrics.test.mjs && node client/test/use-oral.test.mjs && node client/test/snow.test.mjs && node client/test/progress.test.mjs && node client/test/import-data.test.mjs && node client/test/quiz-draft.test.mjs && node client/test/quiz-queue.test.mjs && node client/test/expressiveMeans.test.mjs",
     "notify-update": "node scripts/notify-update.mjs"
   }
 }

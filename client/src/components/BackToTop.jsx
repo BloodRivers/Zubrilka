@@ -10,11 +10,11 @@ export default function BackToTop() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const scroller = document.querySelector(".scrollarea");
-    if (!scroller) return;
-    let last = scroller.scrollTop;
+    let last = document.querySelector(".scrollarea")?.scrollTop || 0;
+    // Скролл не всплывает, поэтому ловим его в фазе захвата: узел .scrollarea
+    // заменяется при смене маршрута, и подписка на старый узел отвалилась бы.
     const update = () => {
-      const top = scroller.scrollTop;
+      const top = document.querySelector(".scrollarea")?.scrollTop || 0;
       const delta = top - last;
       if (delta < -1) {
         setShow(top > 8);
@@ -24,8 +24,8 @@ export default function BackToTop() {
         last = top;
       }
     };
-    scroller.addEventListener("scroll", update, { passive: true });
-    return () => scroller.removeEventListener("scroll", update);
+    document.addEventListener("scroll", update, true);
+    return () => document.removeEventListener("scroll", update, true);
   }, []);
 
   return createPortal(
@@ -39,7 +39,7 @@ export default function BackToTop() {
         position: "fixed",
         right: 18,
         bottom: "calc(84px + env(safe-area-inset-bottom, 0px))",
-        zIndex: 260,
+        zIndex: 150,
         width: 46,
         height: 46,
         display: "grid",

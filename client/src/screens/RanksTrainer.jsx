@@ -9,7 +9,7 @@ import Button from "../components/Button";
 import Segmented from "../components/Segmented";
 import BackToTop from "../components/BackToTop";
 import ListRow from "../components/ListRow";
-import { Stat } from "./StressTrainer";
+import Stat from "../components/Stat";
 import { sfx } from "../sfx";
 import { setQuizActive } from "../nav";
 

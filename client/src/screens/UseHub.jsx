@@ -5,7 +5,7 @@ import ListRow from "../components/ListRow";
 import Accordion from "../components/Accordion";
 import Segmented from "../components/Segmented";
 import { Brain } from "lucide-react";
-import { TRAINER_LIST } from "./StressTrainer";
+import { TRAINER_LIST } from "../data/trainers";
 import { ORAL_TASKS } from "../useOral";
 import { TASK_ICONS } from "./OralBank";
 
@@ -18,6 +18,7 @@ const USE_TASK_GROUPS = [
   { task: "9", title: "Корни", ids: ["roots"] },
   { task: "10", title: "Приставки ПРЕ- и ПРИ-", ids: ["prepri"] },
   { task: "15", title: "Н и НН", ids: ["n-nn"] },
+  { task: "22", title: "Средства выразительности", ids: ["expressive-means"] },
 ];
 
 export const USE_SUBJECTS = [

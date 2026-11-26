@@ -40,7 +40,7 @@ import Changelog from "./screens/Changelog";
 import GradeLab from "./screens/GradeLab";
 import NotFound from "./screens/NotFound";
 import { Check, Lock } from "lucide-react";
-import { TRAINER_LIST } from "./screens/StressTrainer";
+import { TRAINER_LIST } from "./data/trainers";
 
 function titleFor(path) {
   if (path === "/") return "Главная";

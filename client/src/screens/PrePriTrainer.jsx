@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
-import { shuffle } from "../utils";
 import ProgressBar from "../components/ProgressBar";
 import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
 import BackToTop from "../components/BackToTop";
-import { Stat, TRAINER_LIST } from "./StressTrainer";
-import { sfx } from "../sfx";
+import Stat from "../components/Stat";
+import { TRAINER_LIST } from "../data/trainers";
+import useQuizQueue from "../hooks/useQuizQueue";
 import { setQuizActive } from "../nav";
 import { PREPRI_ITEMS, PREPRI_THEORY } from "../data/prepri";
 
@@ -19,18 +19,12 @@ export default function PrePriTrainer() {
   const navigate = useNavigate();
   const { slug } = useParams();
   const trainer = TRAINER_LIST.find((x) => x.id === slug);
-  const queueRef = useRef([]);
-  const wrongRef = useRef(new Set());
   const inputRef = useRef(null);
   const [tab, setTab] = useState("theory");
-  const [current, setCurrent] = useState(null);
   const [input, setInput] = useState("");
   const [locked, setLocked] = useState(false);
-  const [verdict, setVerdict] = useState(null);
-  const [streak, setStreak] = useState(0);
-  const [bestStreak, setBestStreak] = useState(0);
-  const [mistakes, setMistakes] = useState(0);
-  const [done, setDone] = useState(false);
+  const quiz = useQuizQueue(PREPRI_ITEMS, (item) => item.text.replace("•", item.answer));
+  const { current, verdict, streak, bestStreak, mistakes, done, remaining, wrongItems, grade } = quiz;
 
   useEffect(() => {
     setQuizActive(tab === "train" && !done);
@@ -40,27 +34,15 @@ export default function PrePriTrainer() {
   const focus = () => inputRef.current?.focus();
 
   const next = () => {
-    const q = queueRef.current;
+    quiz.next();
     setLocked(false);
-    setVerdict(null);
     setInput("");
-    if (q.length === 0) {
-      setCurrent(null);
-      setDone(true);
-      return;
-    }
-    setCurrent(q.shift());
     focus();
   };
 
   const start = () => {
-    queueRef.current = shuffle(PREPRI_ITEMS);
-    wrongRef.current = new Set();
-    setStreak(0);
-    setBestStreak(0);
-    setMistakes(0);
-    setDone(false);
-    next();
+    quiz.start();
+    setInput("");
   };
 
   useEffect(() => {
@@ -77,24 +59,7 @@ export default function PrePriTrainer() {
     const v = (value ?? input).toLowerCase();
     if (!/^[а-яё]{3}$/.test(v)) return;
     setLocked(true);
-    const correct = v === current.answer;
-    if (correct) {
-      sfx.correct();
-      setStreak((s) => s + 1);
-      setBestStreak((b) => Math.max(b, streak + 1));
-    } else {
-      sfx.wrong();
-      setStreak(0);
-      setMistakes((m) => m + 1);
-      wrongRef.current.add(current.text.replace("•", current.answer));
-      const q = queueRef.current;
-      for (let n = 0; n < 2; n++) {
-        const copy = { ...current };
-        const pos = Math.min(q.length, Math.floor(Math.random() * (Math.min(8, q.length) + 1)));
-        q.splice(pos, 0, copy);
-      }
-    }
-    setVerdict({ correct });
+    grade(v === current.answer);
     focus();
   };
 
@@ -108,7 +73,6 @@ export default function PrePriTrainer() {
 
   if (!current && !done) return null;
 
-  const remaining = queueRef.current.length;
   const progress = done ? 1 : Math.min(1, Math.max(0, 1 - remaining / TOTAL));
 
   const [before, after] = current ? current.text.split("•") : ["", ""];
@@ -205,7 +169,7 @@ export default function PrePriTrainer() {
           secondLabel="Лучшая серия"
           secondValue={bestStreak}
           scoreLabel="слов пройдено"
-          wrongItems={[...wrongRef.current].map((w) => ({ key: w, label: w, badge: "повторить" }))}
+          wrongItems={wrongItems.map((w) => ({ key: w, label: w, badge: "повторить" }))}
           emptyMsg="Все слова усвоены уверенно."
           onRetry={start}
           onBack={trainer?.useSubject ? () => navigate(`/use/${trainer.useSubject}`) : null}

@@ -7,8 +7,9 @@ import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
 import BackToTop from "../components/BackToTop";
-import { Stat, TRAINER_LIST } from "./StressTrainer";
-import { sfx } from "../sfx";
+import Stat from "../components/Stat";
+import { TRAINER_LIST } from "../data/trainers";
+import useQuizQueue from "../hooks/useQuizQueue";
 import { setQuizActive } from "../nav";
 import { SPEECH_STYLES, SPEECH_STYLE_MAP, SPEECH_STYLE_NOTES, SPEECH_STYLE_QUESTIONS } from "../data/speechStyles";
 
@@ -20,17 +21,11 @@ export default function SpeechStylesTrainer() {
   const navigate = useNavigate();
   const { slug } = useParams();
   const trainer = TRAINER_LIST.find((item) => item.id === slug);
-  const queueRef = useRef([]);
   const optionsRef = useRef([]);
-  const wrongRef = useRef(new Set());
   const [tab, setTab] = useState("theory");
-  const [current, setCurrent] = useState(null);
   const [locked, setLocked] = useState(false);
-  const [verdict, setVerdict] = useState(null);
-  const [streak, setStreak] = useState(0);
-  const [bestStreak, setBestStreak] = useState(0);
-  const [mistakes, setMistakes] = useState(0);
-  const [done, setDone] = useState(false);
+  const quiz = useQuizQueue(SPEECH_STYLE_QUESTIONS, (item) => SPEECH_STYLE_MAP[item.answer].title);
+  const { current, verdict, streak, bestStreak, mistakes, done, remaining, wrongItems, grade } = quiz;
 
   useEffect(() => {
     setQuizActive(tab === "train" && Boolean(current) && !done);
@@ -38,28 +33,15 @@ export default function SpeechStylesTrainer() {
   }, [tab, current, done]);
 
   const next = () => {
-    const queue = queueRef.current;
+    quiz.next();
     setLocked(false);
-    setVerdict(null);
-    if (queue.length === 0) {
-      setCurrent(null);
-      setDone(true);
-      return;
-    }
-    setCurrent(queue.shift());
     optionsRef.current = shuffle(STYLE_IDS);
   };
 
   const start = () => {
-    queueRef.current = shuffle(SPEECH_STYLE_QUESTIONS);
-    wrongRef.current = new Set();
-    setStreak(0);
-    setBestStreak(0);
-    setMistakes(0);
-    setDone(false);
+    quiz.start();
     setLocked(false);
-    setVerdict(null);
-    next();
+    optionsRef.current = shuffle(STYLE_IDS);
   };
 
   useEffect(() => {
@@ -69,24 +51,7 @@ export default function SpeechStylesTrainer() {
   const answer = (styleId) => {
     if (locked || done || !current) return;
     setLocked(true);
-    const correct = styleId === current.answer;
-    if (correct) {
-      sfx.correct();
-      const nextStreak = streak + 1;
-      setStreak(nextStreak);
-      setBestStreak((value) => Math.max(value, nextStreak));
-    } else {
-      sfx.wrong();
-      setStreak(0);
-      setMistakes((value) => value + 1);
-      wrongRef.current.add(SPEECH_STYLE_MAP[current.answer].title);
-      const queue = queueRef.current;
-      for (let i = 0; i < 2; i++) {
-        const position = Math.min(queue.length, Math.floor(Math.random() * (Math.min(8, queue.length) + 1)));
-        queue.splice(position, 0, current);
-      }
-    }
-    setVerdict({ correct, picked: styleId });
+    grade(styleId === current.answer, styleId);
   };
 
   const renderTop = () => (
@@ -148,7 +113,6 @@ export default function SpeechStylesTrainer() {
 
   if (!current && !done) return null;
 
-  const remaining = queueRef.current.length;
   const progress = done ? 1 : Math.min(1, Math.max(0, (TOTAL - remaining) / TOTAL));
   const correctStyle = SPEECH_STYLE_MAP[current?.answer];
 
@@ -174,7 +138,7 @@ export default function SpeechStylesTrainer() {
           secondLabel="Лучшая серия"
           secondValue={bestStreak}
           scoreLabel="заданий пройдено"
-          wrongItems={[...wrongRef.current].map((title) => ({ key: title, label: title, badge: "повторить" }))}
+          wrongItems={wrongItems.map((title) => ({ key: title, label: title, badge: "повторить" }))}
           emptyMsg="Стили речи различаются уверенно."
           onRetry={start}
           onBack={trainer?.useSubject ? () => navigate(`/use/${trainer.useSubject}`) : null}

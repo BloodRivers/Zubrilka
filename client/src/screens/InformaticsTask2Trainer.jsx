@@ -5,12 +5,11 @@ import { shuffle } from "../utils";
 import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
-import MarkdownText from "../components/MarkdownText";
+import TheoryCard from "../components/TheoryCard";
 import BackToTop from "../components/BackToTop";
 import CodeEditor, { CodeBlock } from "../components/CodeEditor";
 import usePython from "../hooks/usePython";
-import { ChevronDown } from "lucide-react";
-import { TRAINER_LIST } from "./StressTrainer";
+import { TRAINER_LIST } from "../data/trainers";
 import { sfx } from "../sfx";
 import { setQuizActive } from "../nav";
 import { INF_TASK2 } from "../data/informatics-task2";
@@ -29,48 +28,6 @@ function Formula({ item, t }) {
           {f}
         </div>
       ))}
-    </div>
-  );
-}
-
-function TheoryCard({ group, t }) {
-  const [open, setOpen] = useState(true);
-  const danger = group.tone === "danger";
-
-  return (
-    <div style={{ borderRadius: 20, border: `1px solid ${danger ? t.danger : t.border}`, background: danger ? t.dangerTint : t.surface, overflow: "hidden" }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          width: "100%",
-          padding: "16px 18px",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          textAlign: "left",
-        }}
-      >
-        <span style={{ color: danger ? t.danger : t.text, fontSize: 16, fontWeight: 700 }}>{group.title}</span>
-        <ChevronDown
-          size={18}
-          color={danger ? t.danger : t.sub}
-          style={{ flex: "0 0 auto", transform: open ? "rotate(180deg)" : "none", transition: "transform 240ms ease" }}
-        />
-      </button>
-      <div className={`accordion${open ? " open" : ""}`}>
-        <div className="accordion-inner">
-          <div style={{ padding: "0 18px 14px" }}>
-            <MarkdownText text={group.md} t={t} />
-            {group.code && <CodeBlock code={group.code} />}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -286,7 +243,7 @@ export default function InformaticsTask2Trainer() {
         <BackToTop />
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
           {INF_TASK2_THEORY.map((g) => (
-            <TheoryCard key={g.title} group={g} t={t} />
+            <TheoryCard key={g.title} group={g}>{g.code && <CodeBlock code={g.code} />}</TheoryCard>
           ))}
         </div>
       </div>
