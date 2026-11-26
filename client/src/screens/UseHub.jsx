@@ -17,6 +17,7 @@ const USE_TASK_GROUPS = [
   { task: "5", title: "Паронимы", ids: ["paronyms"] },
   { task: "9", title: "Корни", ids: ["roots"] },
   { task: "10", title: "Приставки ПРЕ- и ПРИ-", ids: ["prepri"] },
+  { task: "15", title: "Н и НН", ids: ["n-nn"] },
 ];
 
 export const USE_SUBJECTS = [

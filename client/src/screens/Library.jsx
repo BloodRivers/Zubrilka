@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
 import { EASE } from "../theme/theme";
@@ -8,7 +7,8 @@ import Segmented from "../components/Segmented";
 import Avatar from "../components/Avatar";
 import ListRow from "../components/ListRow";
 import Modal from "../components/Modal";
-import { ArrowUp, Check, GraduationCap, SlidersHorizontal } from "lucide-react";
+import { Check, GraduationCap, SlidersHorizontal } from "lucide-react";
+import BackToTop from "../components/BackToTop";
 import { listPublicNotes, listPublicTests } from "../api/firestore";
 import { testSizeLabel } from "../api/backend";
 import { setReturnTo } from "../nav";
@@ -71,8 +71,6 @@ export default function Library() {
   const [q, setQ] = useState("");
   const [subject, setSubject] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [showTop, setShowTop] = useState(false);
-  const lastTopRef = useRef(0);
 
   useEffect(() => {
     (async () => {
@@ -139,25 +137,6 @@ export default function Library() {
     if (tab === "tests") return testItems;
     return [];
   }, [notes, tests, tab, q, subject]);
-
-  useEffect(() => {
-    const scroller = document.querySelector(".scrollarea");
-    if (!scroller) return;
-    lastTopRef.current = scroller.scrollTop;
-    const update = () => {
-      const top = scroller.scrollTop;
-      const delta = top - lastTopRef.current;
-      if (delta < -1) {
-        setShowTop(top > 8);
-        lastTopRef.current = top;
-      } else if (delta > 1) {
-        setShowTop(false);
-        lastTopRef.current = top;
-      }
-    };
-    scroller.addEventListener("scroll", update, { passive: true });
-    return () => scroller.removeEventListener("scroll", update);
-  }, [items.length, tab, showGhost]);
 
   const searchBar = (opacity) => (
     <div style={{ display: "flex", gap: 8, marginBottom: 14, opacity }}>
@@ -413,40 +392,7 @@ export default function Library() {
         </>
       )}
 
-      {createPortal(
-        <button
-          type="button"
-          className="press"
-          aria-label="Наверх"
-          tabIndex={showTop ? 0 : -1}
-          onClick={() => document.querySelector(".scrollarea")?.scrollTo({ top: 0, behavior: "smooth" })}
-          style={{
-            position: "fixed",
-            right: 18,
-            bottom: "calc(84px + env(safe-area-inset-bottom, 0px))",
-            zIndex: 260,
-            width: 46,
-            height: 46,
-            display: "grid",
-            placeItems: "center",
-            borderRadius: 999,
-            border: `1px solid ${t.border}`,
-            background: "transparent",
-            color: t.text,
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
-            cursor: "pointer",
-            opacity: showTop ? 1 : 0,
-            transform: showTop ? "translateY(0) scale(1)" : "translateY(8px) scale(0.9)",
-            pointerEvents: showTop ? "auto" : "none",
-            transition: `opacity 200ms ease, transform 240ms ${EASE}`,
-          }}
-        >
-          <ArrowUp size={20} />
-        </button>,
-        document.body
-      )}
+      <BackToTop />
     </div>
   );
 }

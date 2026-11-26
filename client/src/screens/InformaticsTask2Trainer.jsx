@@ -6,6 +6,7 @@ import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
 import MarkdownText from "../components/MarkdownText";
+import BackToTop from "../components/BackToTop";
 import CodeEditor, { CodeBlock } from "../components/CodeEditor";
 import usePython from "../hooks/usePython";
 import { ChevronDown } from "lucide-react";
@@ -282,6 +283,7 @@ export default function InformaticsTask2Trainer() {
     return (
       <div style={{ paddingTop: 4 }}>
         {renderTop()}
+        <BackToTop />
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
           {INF_TASK2_THEORY.map((g) => (
             <TheoryCard key={g.title} group={g} t={t} />

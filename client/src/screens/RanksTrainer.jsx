@@ -7,6 +7,7 @@ import ProgressBar from "../components/ProgressBar";
 import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
+import BackToTop from "../components/BackToTop";
 import ListRow from "../components/ListRow";
 import { Stat } from "./StressTrainer";
 import { sfx } from "../sfx";
@@ -334,6 +335,7 @@ export default function RanksTrainer({ level, categories, ambiguous = {}, catego
     return (
       <div style={{ paddingTop: 4 }}>
         {renderTop()}
+        <BackToTop />
         {theory ? (
           theory
         ) : (

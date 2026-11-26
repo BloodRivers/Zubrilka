@@ -380,7 +380,7 @@ export default function MarkdownText({ text, t, style }) {
         switch (b.type) {
           case "heading":
             return (
-              <div key={k} style={{ color: t.text, fontSize: [19, 16, 15, 14, 14, 14][Math.min(5, b.level - 1)], fontWeight: 700, margin: "14px 0 6px", lineHeight: 1.3 }}>
+              <div key={k} style={{ color: t.text, fontSize: [19, 16, 15, 14, 14, 14][Math.min(5, b.level - 1)], fontWeight: 700, margin: "24px 0 6px", lineHeight: 1.3 }}>
                 <Inline nodes={parseInline(b.text)} t={t} k={k} />
               </div>
             );

@@ -11,6 +11,7 @@ const FLAKES = Array.from({ length: 40 }, (_, i) => ({
   duration: 8 + rand(i, 3) * 9,
   delay: -rand(i, 4) * 17,
   drift: `${((rand(i, 5) - 0.5) * 120).toFixed(0)}px`,
+  rotation: `${((rand(i, 7) - 0.5) * 180).toFixed(0)}deg`,
   opacity: 0.25 + rand(i, 6) * 0.5,
 }));
 
@@ -30,11 +31,13 @@ export default function Snow() {
             left: flake.left,
             width: flake.size,
             height: flake.size,
-            borderRadius: "50%",
-            background: color,
+            backgroundColor: color,
+            mask: "url(/snowflake.svg) center / contain no-repeat",
+            WebkitMask: "url(/snowflake.svg) center / contain no-repeat",
             opacity: flake.opacity,
             animation: `snowfall ${flake.duration}s linear ${flake.delay}s infinite`,
             "--snow-drift": flake.drift,
+            "--snow-rotation": flake.rotation,
           }}
         />
       ))}

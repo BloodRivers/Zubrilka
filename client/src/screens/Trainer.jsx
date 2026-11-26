@@ -9,6 +9,7 @@ import ParticlesTrainer from "./ParticlesTrainer";
 import RootsTrainer from "./RootsTrainer";
 import SpeechStylesTrainer from "./SpeechStylesTrainer";
 import PrePriTrainer from "./PrePriTrainer";
+import NnTrainer from "./NnTrainer";
 import InformaticsTask2Trainer from "./InformaticsTask2Trainer";
 
 export default function Trainer() {
@@ -22,6 +23,7 @@ export default function Trainer() {
   if (slug === "roots") return <RootsTrainer />;
   if (slug === "speech-styles") return <SpeechStylesTrainer />;
   if (slug === "prepri") return <PrePriTrainer />;
+  if (slug === "n-nn") return <NnTrainer />;
   if (slug === "inf-task2") return <InformaticsTask2Trainer />;
   return <StressTrainer />;
 }

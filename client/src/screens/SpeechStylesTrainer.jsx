@@ -6,6 +6,7 @@ import ProgressBar from "../components/ProgressBar";
 import TrainerDone from "../components/TrainerDone";
 import Button from "../components/Button";
 import Segmented from "../components/Segmented";
+import BackToTop from "../components/BackToTop";
 import { Stat, TRAINER_LIST } from "./StressTrainer";
 import { sfx } from "../sfx";
 import { setQuizActive } from "../nav";
@@ -103,6 +104,7 @@ export default function SpeechStylesTrainer() {
     return (
       <div style={{ paddingTop: 4 }}>
         {renderTop()}
+        <BackToTop />
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
           <div style={{ borderRadius: 20, border: `1px solid ${t.border}`, background: t.surface, padding: "18px 18px 14px" }}>
             <div style={{ color: t.text, fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Задание 3 ЕГЭ</div>
