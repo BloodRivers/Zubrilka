@@ -11,6 +11,7 @@ import {
   Landmark,
   Palette,
   Music2,
+  GraduationCap,
   Dumbbell,
   TrendingUp,
   HeartPulse,
@@ -55,6 +56,13 @@ const PREMADE_SUBJECTS = [
 ];
 
 export const CHANGELOG = [
+  {
+    date: "27 ноября 2026",
+    items: [
+      "Учебники в предмете: добавь PDF, листай страницы и копируй ссылку на нужную — вставь её в конспект",
+      "PDF хранится только на устройстве, в аккаунте — только список учебников",
+    ],
+  },
   {
     date: "26 ноября 2026",
     items: [
@@ -819,6 +827,23 @@ export default function Subjects() {
               </span>
             </Button>
           )}
+        </div>
+      )}
+
+      {!showGhost && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ color: t.sub, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+            Сервисы
+          </div>
+          <div style={{ borderRadius: 18, border: `1px solid ${t.border}`, background: t.surface, padding: "0 16px" }}>
+            <ListRow
+              icon={<GraduationCap size={20} color={t.text} />}
+              title="ЕГЭ"
+              sub="Задания и тренажёры"
+              onClick={() => navigate("/library", { state: { tab: "use" } })}
+              borderless
+            />
+          </div>
         </div>
       )}
 

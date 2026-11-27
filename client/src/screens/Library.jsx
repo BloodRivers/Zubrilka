@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../theme/ThemeContext";
 import { EASE } from "../theme/theme";
 import { GhostLibrary, useGhostHold } from "../components/Ghost";
@@ -63,11 +63,12 @@ const KIND_COLOR = {
 export default function Library() {
   const { t } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const showGhost = useGhostHold(loading);
   const [notes, setNotes] = useState([]);
   const [tests, setTests] = useState([]);
-  const [tab, setTab] = useState("notes");
+  const [tab, setTab] = useState(location.state?.tab === "use" ? "use" : "notes");
   const [q, setQ] = useState("");
   const [subject, setSubject] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);

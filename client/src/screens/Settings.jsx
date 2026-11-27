@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
-import { Bell, ChevronRight, ChevronDown, Check, KeyRound, Heart, RefreshCw, Lock } from "lucide-react";
+import { Bell, ChevronRight, Check, KeyRound, Heart, RefreshCw, Lock } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext";
-import { EASE } from "../theme/theme";
+import Dropdown from "../components/Dropdown";
 import { auth } from "../firebase";
 import { MODEL_OPTIONS, getApiKey, setApiKey, getBalance, getModel, setModel, onApiKeyChange, aiUsedToday, AI_DAILY_LIMIT } from "../api/ai";
 import { updateUserProfile, getUserProfile } from "../api/firestore";
@@ -96,8 +96,6 @@ export default function Settings({ isGuest }) {
   const { pref, setPref, t, theme, noteStyle, setNoteStyle, snowEnabled, setSnowEnabled } = useTheme();
   const { alert } = useAlert();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
   const [keyInput, setKeyInput] = useState(getApiKey());
   const [balanceKey, setBalanceKey] = useState(getApiKey());
   const [balance, setBalance] = useState({ status: "idle", amount: null, error: "" });
@@ -171,7 +169,6 @@ export default function Settings({ isGuest }) {
     { v: "dark", label: "Тёмная" },
     { v: "system", label: "Система" },
   ];
-  const currentLabel = themeOpts.find((o) => o.v === pref)?.label ?? "Система";
 
   const docRow = (label, path) => (
     <button
@@ -197,64 +194,15 @@ export default function Settings({ isGuest }) {
   return (
     <div>
       <div style={sectionTitle(t)}>Оформление</div>
-      <div style={{ position: "relative", ...row(t), justifyContent: "space-between", gap: 12, cursor: "pointer", zIndex: open ? 30 : undefined }} onClick={() => setOpen((o) => !o)}>
-        <span style={{ color: t.text, fontSize: 15, pointerEvents: "none" }}>Тема</span>
-        <span style={{ display: "flex", alignItems: "center", gap: 6, color: t.sub, fontSize: 14, fontWeight: 600, pointerEvents: "none" }}>
-          {currentLabel}
-          <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform 200ms ease" }} />
-        </span>
-
-        {open && (
-          <>
-            <div onClick={(e) => { e.stopPropagation(); setOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 10, background: "transparent" }} />
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "absolute",
-                top: "calc(100% + 6px)",
-                left: 8,
-                right: 8,
-                zIndex: 20,
-                background: t.surface,
-                border: `1px solid ${t.border}`,
-                borderRadius: 16,
-                padding: 6,
-                boxShadow: theme === "dark" ? "0 16px 40px rgba(0,0,0,0.6)" : "0 16px 40px rgba(0,0,0,0.15)",
-                animation: `modalIn 160ms ${EASE}`,
-              }}
-            >
-              {themeOpts.map((o) => {
-                const active = pref === o.v;
-                return (
-                  <button
-                    key={o.v}
-                    className="rowpress"
-                    onClick={() => { setPref(o.v); setOpen(false); }}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 14px",
-                      borderRadius: 12,
-                      border: "none",
-                      background: "transparent",
-                      color: t.text,
-                      fontSize: 15,
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    {o.label}
-                    {active && <Check size={16} color={t.invBg} strokeWidth={3} />}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
+      <Dropdown
+        t={t}
+        theme={theme}
+        options={themeOpts}
+        value={pref}
+        onChange={setPref}
+        title="Тема"
+        rowStyle={row(t)}
+      />
 
       <button
         type="button"
@@ -436,67 +384,16 @@ export default function Settings({ isGuest }) {
         <div style={{ color: t.danger, fontSize: 12, margin: "-2px 4px 8px" }}>{balance.error}</div>
       )}
 
-      <div
-        style={{ position: "relative", ...row(t), justifyContent: "space-between", gap: 12, cursor: "pointer", zIndex: modelOpen ? 30 : undefined }}
-        onClick={() => setModelOpen((o) => !o)}
-      >
-        <span style={{ color: t.text, fontSize: 15, pointerEvents: "none" }}>Модель</span>
-        <span style={{ display: "flex", alignItems: "center", gap: 6, color: t.sub, fontSize: 14, fontWeight: 600, pointerEvents: "none" }}>
-          {MODEL_OPTIONS.find((o) => o.v === model)?.label || model}
-          <ChevronDown size={16} style={{ transform: modelOpen ? "rotate(180deg)" : undefined, transition: "transform 200ms ease" }} />
-        </span>
-
-        {modelOpen && (
-          <>
-            <div onClick={(e) => { e.stopPropagation(); setModelOpen(false); }} style={{ position: "fixed", inset: 0, zIndex: 10, background: "transparent" }} />
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "absolute",
-                top: "calc(100% + 6px)",
-                left: 8,
-                right: 8,
-                zIndex: 20,
-                background: t.surface,
-                border: `1px solid ${t.border}`,
-                borderRadius: 16,
-                padding: 6,
-                boxShadow: theme === "dark" ? "0 16px 40px rgba(0,0,0,0.6)" : "0 16px 40px rgba(0,0,0,0.15)",
-                animation: `modalIn 160ms ${EASE}`,
-              }}
-            >
-              {MODEL_OPTIONS.map((o) => {
-                const active = model === o.v;
-                return (
-                  <button
-                    key={o.v}
-                    className="rowpress"
-                    onClick={() => { setModel(o.v); setModelOpen(false); }}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 14px",
-                      borderRadius: 12,
-                      border: "none",
-                      background: "transparent",
-                      color: t.text,
-                      fontSize: 15,
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    {o.label}
-                    {active && <Check size={16} color={t.invBg} strokeWidth={3} />}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
+      <Dropdown
+        t={t}
+        theme={theme}
+        options={MODEL_OPTIONS}
+        value={model}
+        onChange={setModel}
+        title="Модель"
+        placeholder={model}
+        rowStyle={row(t)}
+      />
       </>
       )}
 

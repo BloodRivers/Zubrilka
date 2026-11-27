@@ -13,6 +13,7 @@ import SharedAuthorBar from "../components/AuthorBar";
 import MathText from "../components/MathText";
 import MarkdownText from "../components/MarkdownText";
 import SaveToSubjectModal from "../components/SaveToSubjectModal";
+import UseTextbook from "../components/UseTextbook";
 import TestEditModal from "../components/TestEditModal";
 import useLongPress from "../hooks/useLongPress";
 import { GhostNote, useGhostHold } from "../components/Ghost";
@@ -284,6 +285,7 @@ export default function NoteDetail() {
   const [editingTest, setEditingTest] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editText, setEditText] = useState("");
+  const [links, setLinks] = useState("");
   const [textBusy, setTextBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const showGhost = useGhostHold(!note);
@@ -350,7 +352,7 @@ export default function NoteDetail() {
     if (!note || textBusy || !editText.trim()) return;
     setTextBusy(true);
     try {
-      const text = editText.trim();
+      const text = links ? `${editText.trimEnd()}\n${links}` : editText.trim();
       await updateNote(note.id, { text });
       setNote({ ...note, text });
       setEditOpen(false);
@@ -397,6 +399,7 @@ export default function NoteDetail() {
   }
 
   const hasSummary = normalizeSummary(note.summary).length;
+  const textHasLinks = /\[[^\]]+\]\(\/textbook\//.test(note.text || "");
 
   return (
     <div>
@@ -457,15 +460,23 @@ export default function NoteDetail() {
 
       {tab === "text" && note.text?.trim() && (
         <div>
-          <MathText
-            text={note.text.trim()}
-            style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
-          />
+          {textHasLinks ? (
+            <MarkdownText
+              text={note.text.trim()}
+              t={t}
+              style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
+            />
+          ) : (
+            <MathText
+              text={note.text.trim()}
+              style={{ color: t.text, fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}
+            />
+          )}
           {!isForeign && !isGuest && (
             <div style={{ marginTop: 18 }}>
               <Button
                 variant="dashed"
-                onClick={() => { setEditText(note.text); setEditOpen(true); }}
+                onClick={() => { setEditText(note.text); setLinks(""); setEditOpen(true); }}
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <Pencil size={15} /> Редактировать текст
@@ -547,6 +558,7 @@ export default function NoteDetail() {
             resize: "vertical",
           }}
         />
+        <UseTextbook subjectId={note.subject_id} onLinks={setLinks} />
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <Button onClick={saveText} disabled={textBusy || !editText.trim()}>
             {textBusy ? "Сохраняю…" : "Сохранить"}

@@ -34,6 +34,7 @@ import Settings from "./screens/Settings";
 import Account from "./screens/Account";
 import Leaderboard from "./screens/Leaderboard";
 import Library from "./screens/Library";
+import TextbookReader from "./screens/TextbookReader";
 import UserProfile from "./screens/UserProfile";
 import Legal from "./screens/Legal";
 import Changelog from "./screens/Changelog";
@@ -54,12 +55,14 @@ function titleFor(path) {
   if (/\/subject\//.test(path)) return "Предмет";
   if (/\/note\/.+\/quiz/.test(path)) return "Тест";
   if (/\/note\//.test(path)) return "Конспект";
+  if (/\/textbook\//.test(path)) return "Учебник";
   if (/\/test\//.test(path)) return "Тест";
   if (path === "/results") return "Результат";
   if (/^\/user\//.test(path)) return "Профиль";
   if (path === "/terms") return "Условия использования";
   if (path === "/privacy") return "Конфиденциальность";
   if (path === "/cookies") return "Политика cookies";
+  if (path === "/poem-teacher") return "Учитель стихов";
   if (/^\/trainer\//.test(path)) {
   const t = TRAINER_LIST.find((x) => path.endsWith(x.id) || path.startsWith(`/trainer/${x.id}/`));
   return t?.title || "Тренажёр";
@@ -759,7 +762,7 @@ function Shell() {
               title={screenTitle || titleFor(location.pathname)}
               right={location.pathname === "/" ? DAILY_QUOTE : undefined}
               onBack={
-                /\/subject\/|\/note\/|\/test\/|\/results|\/user\/|\/trainer\/|\/use\/|\/leaderboard|\/(terms|privacy|cookies|changelog)/.test(location.pathname)
+                /\/subject\/|\/note\/|\/textbook\/|\/test\/|\/results|\/user\/|\/trainer\/|\/use\/|\/poem-teacher|\/leaderboard|\/(terms|privacy|cookies|changelog)/.test(location.pathname)
                   ? async () => {
                       if (!(await confirmLeaveQuiz())) return;
                       const dest = backOf(location.pathname, location.state);
@@ -775,6 +778,7 @@ function Shell() {
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Subjects />} />
               <Route path="/changelog" element={<Changelog />} />
+              <Route path="/poem-teacher" element={<Navigate to="/" replace />} />
               <Route path="/trainer/:slug/:level" element={<Trainer />} />
               <Route path="/trainer/:slug" element={<Trainer />} />
               <Route path="/use/:slug" element={<UseHub />} />
@@ -789,6 +793,7 @@ function Shell() {
               <Route path="/subject/:subjectId/quiz" element={isGuest ? <GuestBlock /> : <Quiz />} />
               <Route path="/note/:noteId" element={<NoteDetail />} />
               <Route path="/note/:noteId/quiz" element={isGuest ? <GuestBlock /> : <Quiz />} />
+              <Route path="/textbook/:id" element={<TextbookReader />} />
               <Route path="/test/:testId/quiz/:mode" element={<Quiz />} />
               <Route path="/results" element={isGuest ? <GuestBlock /> : <Results />} />
               <Route path="/user/:userId" element={<UserProfile />} />

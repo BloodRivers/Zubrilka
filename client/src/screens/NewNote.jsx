@@ -6,6 +6,7 @@ import { useTheme } from "../theme/ThemeContext";
 import { EASE } from "../theme/theme";
 import { useAlert } from "../components/Alert";
 import Button from "../components/Button";
+import UseTextbook from "../components/UseTextbook";
 import { plural } from "../utils";
 import { createNote } from "../api/firestore";
 import { ocrNotePhotos, structureNote } from "../api/backend";
@@ -55,6 +56,7 @@ export default function NewNote() {
   /** @type {[{id:string,kind:"image"|"pdf"|"text"|"docx",name:string,src?:string,text?:string,images?:[{name:string,src:string}]}]} */
   const [attachments, setAttachments] = useState([]);
   const [text, setText] = useState("");
+  const [links, setLinks] = useState("");
   const [titleMode, setTitleMode] = useState("ai");
   const [customTitle, setCustomTitle] = useState("");
   const [busy, setBusy] = useState(false);
@@ -185,13 +187,15 @@ export default function NewNote() {
       if (titleMode === "ai") title = parsed.title || fallback;
       if (titleMode === "custom") title = customTitle.trim() || fallback;
 
+      // Ссылки на учебник не гоним через ИИ — он их перепишет.
+      const finalText = links ? `${parsed.text.trimEnd()}\n${links}` : parsed.text;
       // Firestore не примет документ больше 1 МБ: текст и конспект уже заняли
       // часть места, картинкам остаётся остаток.
-      const spent = new Blob([parsed.text, JSON.stringify(parsed.summary || "")]).size;
+      const spent = new Blob([finalText, JSON.stringify(parsed.summary || "")]).size;
       await createNote({
         subject_id: subjectId,
         title,
-        text: parsed.text,
+        text: finalText,
         plan: null,
         summary: parsed.summary,
         retelling: parsed.retelling,
@@ -429,6 +433,8 @@ export default function NewNote() {
           })}
         </div>
       )}
+
+      <UseTextbook subjectId={subjectId} onLinks={setLinks} />
 
       <textarea
         value={text}

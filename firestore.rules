@@ -38,6 +38,13 @@ service cloud.firestore {
       allow update, delete: if isOwner(resource.data);
     }
 
+    // Учебники: в БД только реестр, сам PDF лежит в IndexedDB на устройстве.
+    match /textbooks/{id} {
+      allow read: if isOwner(resource.data);
+      allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
+      allow update, delete: if isOwner(resource.data);
+    }
+
     match /notes/{id} {
       allow read: if (!signedIn() && isPublic(resource.data)) || (signedIn() && (isOwner(resource.data) || isPublic(resource.data)));
       allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;

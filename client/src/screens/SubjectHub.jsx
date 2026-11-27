@@ -12,7 +12,8 @@ import { GhostCards, useGhostHold } from "../components/Ghost";
 import { bestResultsByTest } from "../components/ResultCard";
 import Segmented from "../components/Segmented";
 import TestEditModal from "../components/TestEditModal";
-import { listNotes, getSubject, updateNote, deleteNote, listResults, setNotePublic, listTestsForSubject } from "../api/firestore";
+import { listNotes, getSubject, updateNote, deleteNote, listResults, setNotePublic, listTestsForSubject, listTextbooks } from "../api/firestore";
+import Textbooks from "./Textbooks";
 import { testSizeLabel } from "../api/backend";
 import { setScreenTitle } from "../nav";
 import Switch from "../components/Switch";
@@ -207,6 +208,7 @@ export default function SubjectHub() {
   const { alert } = useAlert();
   const [notes, setNotes] = useState([]);
   const [tests, setTests] = useState([]);
+  const [books, setBooks] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const showGhost = useGhostHold(loading);
@@ -220,14 +222,16 @@ export default function SubjectHub() {
 
   const load = async () => {
     setLoading(true);
-    const [subj, ns, rs] = await Promise.all([
+    const [subj, ns, rs, bs] = await Promise.all([
       getSubject(subjectId).catch(() => null),
       listNotes(subjectId).catch(() => []),
       listResults().catch(() => []),
+      listTextbooks(subjectId).catch(() => []),
     ]);
     setSubjectName(subj?.name || "");
     setScreenTitle(subj?.name || "");
     setNotes(ns);
+    setBooks(bs);
     const ids = ns.map((n) => n.id);
     const ts = await listTestsForSubject(subjectId, ids).catch(() => []);
     setTests(ts);
@@ -275,6 +279,7 @@ export default function SubjectHub() {
   const TABS = [
     { v: "notes", label: "Конспекты", badge: notes.length },
     { v: "tests", label: "Тесты", badge: tests.length },
+    { v: "books", label: "Учебники", badge: books.length },
   ];
 
   return (
@@ -308,22 +313,10 @@ export default function SubjectHub() {
             </span>
           </Button>
         </>
+      ) : tab === "books" ? (
+        <Textbooks subjectId={subjectId} />
       ) : (
         <>
-          {notes.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-              <Button variant="dashed" onClick={() => setPickNoteOpen(true)}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <Plus size={16} /> Новый тест
-                </span>
-              </Button>
-              <Button variant="dashed" onClick={() => navigate(`/subject/${subjectId}/quiz`)}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <FlaskConical size={16} /> Тест по всему предмету
-                </span>
-              </Button>
-            </div>
-          )}
           {tests.length === 0 ? (
             <EmptyState
               icon={<FlaskConical size={24} />}
@@ -343,6 +336,20 @@ export default function SubjectHub() {
                 />
               );
             })
+          )}
+          {notes.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
+              <Button variant="dashed" onClick={() => setPickNoteOpen(true)}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Plus size={16} /> Новый тест
+                </span>
+              </Button>
+              <Button variant="dashed" onClick={() => navigate(`/subject/${subjectId}/quiz`)}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <FlaskConical size={16} /> Тест по всему предмету
+                </span>
+              </Button>
+            </div>
           )}
         </>
       )}
@@ -463,21 +470,24 @@ function SavedTestCard({ test, best, idx, onLongPress }) {
         width: "100%",
         display: "block",
         textAlign: "left",
-        padding: "14px 16px",
-        marginBottom: 8,
-        borderRadius: 16,
+        padding: "18px",
+        marginBottom: 12,
+        borderRadius: 20,
         border: `1px solid ${t.border}`,
         background: t.surface,
         color: t.text,
         fontFamily: "inherit",
         cursor: "pointer",
-        animation: `riseIn 260ms ease-out ${idx * 45}ms both`,
+        WebkitTouchCallout: "none",
+        userSelect: "none",
+        animation: `fadeUp 460ms ${EASE} both`,
+        animationDelay: `${idx * 60}ms`,
       }}
     >
-      <div style={{ fontSize: 15, fontWeight: 650, marginBottom: 5 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, color: t.text, fontSize: 17, fontWeight: 600 }}>
         {test.title || "Тест"}
       </div>
-      <div style={{ color: t.sub, fontSize: 13 }}>
+      <div style={{ color: t.sub, fontSize: 13, marginTop: 3 }}>
         {subtitle}
         {best && ` · лучший результат ${best.score ?? 0}/${best.total ?? 0}`}
       </div>

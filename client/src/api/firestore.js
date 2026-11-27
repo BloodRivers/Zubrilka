@@ -169,6 +169,42 @@ export async function getSubject(id) {
   return snap.exists() ? { id, ...snap.data() } : null;
 }
 
+export async function listTextbooks(subjectId) {
+  const q = query(
+    collection(db, "textbooks"),
+    where("subject_id", "==", subjectId),
+    where("owner_id", "==", uid())
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "ru"));
+}
+
+export async function getTextbook(id) {
+  const snap = await getDoc(doc(db, "textbooks", id));
+  return snap.exists() ? { id, ...snap.data() } : null;
+}
+
+export async function createTextbook({ subject_id, title }) {
+  if (!subject_id) throw new Error("Не указан предмет");
+  if (!title?.trim()) throw new Error("Не указано название учебника");
+  return addDoc(collection(db, "textbooks"), {
+    title: title.trim(),
+    subject_id,
+    ...meta(),
+  });
+}
+
+export async function updateTextbook(id, { title }) {
+  if (!title?.trim()) throw new Error("Не указано название учебника");
+  return setDoc(doc(db, "textbooks", id), { title: title.trim() }, { merge: true });
+}
+
+export async function deleteTextbook(id) {
+  return deleteDoc(doc(db, "textbooks", id));
+}
+
 export async function listNotes(subjectId) {
   const q = query(
     collection(db, "notes"),

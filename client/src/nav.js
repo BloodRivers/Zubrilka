@@ -36,6 +36,7 @@ export function consumeReturnTo() {
 
 export function tabOf(pathname) {
   if (pathname.startsWith("/library") || pathname.startsWith("/trainer") || pathname.startsWith("/use") || pathname.startsWith("/user")) return "/library";
+  if (pathname.startsWith("/textbook") || pathname.startsWith("/poem-teacher")) return "/";
   if (pathname.startsWith("/settings")) return "/settings";
   if (pathname.startsWith("/account") || pathname === "/leaderboard") return "/account";
   if (
@@ -74,6 +75,7 @@ export function resumeTab(root) {
 export function backOf(pathname, state) {
   if (state?.from) return state.from;
   if (pathname === "/changelog") return "/";
+  if (pathname.startsWith("/poem-teacher")) return "/";
   if (pathname === "/leaderboard") return "/account";
   const ret = peekReturnTo();
   if (ret && /^\/(note|test|results)/.test(pathname)) return ret;
@@ -83,6 +85,7 @@ export function backOf(pathname, state) {
   if (noteQuiz) return `/note/${noteQuiz[1]}`;
 
   if (/^\/trainer\//.test(pathname)) return resumeTab("/library") ?? "/library";
+  if (/^\/textbook\//.test(pathname)) return resumeTab("/") ?? "/";
   if (/^\/use\//.test(pathname)) return "/library";
 
   const sc = pathname.match(/^\/subject\/([^/]+)\//);

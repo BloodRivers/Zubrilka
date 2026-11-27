@@ -19,7 +19,10 @@ const API_BASE = "https://polza.ai/api/v1/chat/completions";
 const BALANCE_API = "https://polza.ai/api/v1/balance";
 const STORAGE_UPLOAD = "https://polza.ai/api/v1/storage/upload";
 const TRANSCRIBE_API = "https://polza.ai/api/v1/audio/transcriptions";
+const TTS_API = "https://polza.ai/api/v1/audio/speech";
 const WHISPER_MODEL = "openai/whisper-1";
+export const TTS_MODEL = "google/gemini-3.8-flash-lite-tts";
+export const TTS_VOICE = "alloy";
 
 function usageDayKey(d = new Date()) {
   const y = d.getFullYear();
@@ -550,7 +553,7 @@ export async function aiJSONStream({ system, prompt, onDelta, maxTokens, name = 
 }
 
 /** Транскрипция аудиозаписи через Whisper (Polza, OpenAI-совместимый endpoint). */
-export async function transcribeRecording(dataUrl) {
+export async function transcribeRecording(dataUrl, { language = "en", prompt } = {}) {
   const key = getApiKey();
   if (!key) throw new Error("Нет ключа Polza AI — вставь его в Настройках → Модель ИИ");
   await reserveAiSlot();
@@ -564,8 +567,8 @@ export async function transcribeRecording(dataUrl) {
       body: JSON.stringify({
         model: WHISPER_MODEL,
         file: dataUrl,
-        language: "en",
-        prompt: "Transcribe the words exactly as spoken, without correcting grammar or word forms.",
+        language,
+        prompt: prompt || "Transcribe the words exactly as spoken, without correcting grammar or word forms.",
         response_format: "verbose_json",
         timestamp_granularities: ["word"],
       }),
@@ -594,6 +597,41 @@ export async function transcribeRecording(dataUrl) {
   const duration = Number(data?.duration) || 0;
   pushLog({ ts: Date.now(), name: "whisper", model: WHISPER_MODEL, ok: true, out: `${text.slice(0, 1500)} (words=${words.length}, ${duration}s)` });
   return { text, words, duration };
+}
+
+/** Озвучка через Polza TTS (тот endpoint, что и предгенерация ЕГЭ). */
+export async function synthesizeSpeech(text) {
+  const key = getApiKey();
+  if (!key) throw new Error("Нет ключа Polza AI — вставь его в Настройках → Модели ИИ");
+  emitStatus("Озвучиваю…");
+  let res;
+  try {
+    res = await fetch(TTS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: TTS_MODEL,
+        input: text,
+        voice: TTS_VOICE,
+        response_format: "mp3",
+      }),
+    });
+  } catch (err) {
+    throw new Error(networkHint(err));
+  }
+  const raw = await res.text();
+  let data = null;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    data = null;
+  }
+  if (!res.ok) throw new Error(data?.error?.message || data?.message || `Polza TTS ${res.status}`);
+  const audio = typeof data?.audio === "string" ? data.audio : "";
+  if (!audio) throw new Error("Polza TTS вернул пустой ответ");
+  const bytes = Uint8Array.from(atob(audio), (ch) => ch.charCodeAt(0));
+  pushLog({ ts: Date.now(), name: "tts", model: TTS_MODEL, ok: true, out: text.slice(0, 300) });
+  return new Blob([bytes], { type: "audio/mpeg" });
 }
 
 /** Жёсткая проверка: модель обязана подтвердить, что видит фото. */
